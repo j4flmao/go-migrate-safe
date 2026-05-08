@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gin-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret123
+      POSTGRES_DB: go_migrate_example
+    ports:
+      - "0.0.0.0:5435:5432"
