@@ -86,10 +86,17 @@ func (m *Migrator) driverOrError() (Driver, error) {
 	return nil, fmt.Errorf("migrate: %w: no driver configured; use WithDB or WithDriverInstance", errNoDriver)
 }
 
+// ShadowDriver is a special driver that can be used for shadow database validation.
+type ShadowDriver interface {
+	Driver
+	Reset(ctx context.Context) error // Reset the shadow database to an empty state
+}
+
 // Diff compares the registered struct models against the current DB schema
 // and returns a DiffPlan describing what needs to change.
 // Diff does NOT modify the database or generate any files.
 func (m *Migrator) Diff(ctx context.Context) (*DiffPlan, error) {
+	// Implement actual diff logic using orchestrator.Run internally or similar
 	return nil, fmt.Errorf("migrate.Diff: %w", errNotImplemented)
 }
 

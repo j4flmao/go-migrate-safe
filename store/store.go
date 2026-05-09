@@ -150,7 +150,9 @@ func parseHeader(h string) Header {
 // ChecksumBody returns the SHA-256 hex digest of the body bytes.
 // This must match the body the codegen package signs.
 func ChecksumBody(body string) string {
-	sum := sha256.Sum256([]byte(body))
+	// Normalize line endings to LF to ensure cross-platform stability
+	normalizedBody := strings.ReplaceAll(body, "\r\n", "\n")
+	sum := sha256.Sum256([]byte(normalizedBody))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -227,11 +229,11 @@ func FindFile(dir string, version int64, direction string) (*File, error) {
 
 // Status describes a migration's state.
 type Status struct {
-	Version  int64
-	Name     string
-	UpFile   string
-	DownFile string
-	Applied  bool
+	Version   int64
+	Name      string
+	UpFile    string
+	DownFile  string
+	Applied   bool
 	AppliedAt string
 }
 
@@ -255,14 +257,19 @@ func BuildStatus(_ context.Context, dir string, hist []migrate.MigrationRecord) 
 		}
 	}
 	for _, r := range hist {
+		st := byVersion[r.Version]
+		if st == nil {
+			st = &Status{Version: r.Version, Name: r.Name}
+			byVersion[r.Version] = st
+		}
+
 		if r.Direction == "up" && r.Status == "applied" {
-			st := byVersion[r.Version]
-			if st == nil {
-				st = &Status{Version: r.Version, Name: r.Name}
-				byVersion[r.Version] = st
-			}
 			st.Applied = true
 			st.AppliedAt = r.AppliedAt
+		}
+		if r.Direction == "down" && r.Status == "rolled_back" {
+			st.Applied = false
+			st.AppliedAt = ""
 		}
 	}
 	out := make([]Status, 0, len(byVersion))

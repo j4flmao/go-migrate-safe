@@ -40,10 +40,20 @@ func (r *PostgresReader) ReadSchema(ctx context.Context, schema string) (*migrat
 	for _, tn := range tableNames {
 		tbl := migrate.NewTableModel(tn)
 		cols, order, err := readColumns(ctx, r.db,
-			`SELECT column_name, data_type, is_nullable, column_default
-			 FROM information_schema.columns
-			 WHERE table_schema = $1 AND table_name = $2
-			 ORDER BY ordinal_position`, schema, tn)
+			`SELECT 
+				c.column_name, 
+				c.data_type, 
+				c.is_nullable, 
+				c.column_default,
+				EXISTS (
+					SELECT 1 FROM information_schema.key_column_usage kcu
+					JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
+					WHERE kcu.table_schema = c.table_schema AND kcu.table_name = c.table_name AND kcu.column_name = c.column_name AND tc.constraint_type = 'PRIMARY KEY'
+				) as is_pk,
+				(c.column_default LIKE 'nextval%') as is_auto
+			 FROM information_schema.columns c
+			 WHERE c.table_schema = $1 AND c.table_name = $2
+			 ORDER BY c.ordinal_position`, schema, tn)
 		if err != nil {
 			return nil, fmt.Errorf("postgres reader: read columns for %s: %w", tn, err)
 		}

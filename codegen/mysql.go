@@ -28,7 +28,7 @@ func RenderMySQL(op *migrate.Operation) (string, error) {
 	case migrate.OpAddIndex:
 		return renderMySQLAddIndex(op.Table, op.IndexDef), nil
 	case migrate.OpDropIndex:
-		return fmt.Sprintf("DROP INDEX %s ON %s;", op.Index, op.Table), nil
+		return fmt.Sprintf("ALTER TABLE %s DROP INDEX %s, ALGORITHM=INPLACE, LOCK=NONE;", op.Table, op.Index), nil
 	case migrate.OpAddConstraint:
 		return renderMySQLAddConstraint(op.Table, op.ConstraintDef)
 	case migrate.OpDropConstraint:
@@ -127,7 +127,7 @@ func renderMySQLAddIndex(table string, i *migrate.IndexModel) string {
 	if i.Unique {
 		uniq = "UNIQUE "
 	}
-	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s);", uniq, i.Name, table, strings.Join(i.Columns, ", "))
+	return fmt.Sprintf("ALTER TABLE %s ADD %sINDEX %s (%s), ALGORITHM=INPLACE, LOCK=NONE;", table, uniq, i.Name, strings.Join(i.Columns, ", "))
 }
 
 func renderMySQLAddConstraint(table string, c *migrate.ConstraintModel) (string, error) {

@@ -114,6 +114,7 @@ func renderSQLiteAddColumn(table string, c *migrate.ColumnModel) string {
 	if len(extrasParts) > 0 {
 		parts = append(parts, strings.Join(extrasParts, " "))
 	}
+	// SQLite ADD COLUMN has some restrictions (no PK, no UNIQUE in ADD COLUMN)
 	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s;", table, strings.Join(parts, " "))
 }
 

@@ -104,7 +104,7 @@ func TestCodegen_Postgres_AddIndex_Unique(t *testing.T) {
 	g := codegen.New("postgres", t.TempDir())
 	g.Now = fixedNow
 	res, _ := g.Generate(plan)
-	if !strings.Contains(res.UpContent, "CREATE UNIQUE INDEX IF NOT EXISTS uniq_users_email ON users (email);") {
+	if !strings.Contains(res.UpContent, "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uniq_users_email ON users (email);") {
 		t.Errorf("missing unique index DDL: %s", res.UpContent)
 	}
 }
@@ -183,7 +183,7 @@ func TestCodegen_AddColumn_NotNullWithoutDefault_UsesDefaultNull(t *testing.T) {
 	}
 }
 
-func TestCodegen_MultipleOpsInOnePlan(t *testing.T) {
+func TestCodegen_Postgres_MultipleOpsInOnePlan(t *testing.T) {
 	t1 := migrate.NewTableModel("users")
 	t1.Columns["id"] = &migrate.ColumnModel{Name: "id", SQLType: "BIGINT", IsPK: true, AutoIncrement: true}
 	t1.ColumnOrder = []string{"id"}
@@ -201,8 +201,8 @@ func TestCodegen_MultipleOpsInOnePlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	if !strings.Contains(res.UpContent, "CREATE INDEX") {
-		t.Errorf("expected CREATE INDEX in multi-op output: %s", res.UpContent)
+	if !strings.Contains(res.UpContent, "CREATE INDEX CONCURRENTLY") {
+		t.Errorf("expected CREATE INDEX CONCURRENTLY in multi-op output: %s", res.UpContent)
 	}
 }
 

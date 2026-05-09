@@ -108,28 +108,46 @@ func TestRollback_Order_IsReverseOfForward(t *testing.T) {
 	}
 }
 
-func TestRollback_AddIndex_InvertsToDropIndex(t *testing.T) {
+func TestRollback_RenameColumn_InvertsToRenameBack(t *testing.T) {
 	plan := &migrate.DiffPlan{
 		Operations: []migrate.Operation{
-			{Kind: migrate.OpAddIndex, Table: "users", Index: "idx_users_email",
-				IndexDef: &migrate.IndexModel{Name: "idx_users_email", Columns: []string{"email"}}},
+			{
+				Kind:   migrate.OpRenameColumn,
+				Table:  "users",
+				Before: &migrate.ColumnModel{Name: "old_name", SQLType: "TEXT"},
+				After:  &migrate.ColumnModel{Name: "new_name", SQLType: "TEXT"},
+			},
 		},
 	}
+
 	rp, _ := rollback.New("postgres").Build(plan, "")
-	if rp.RollbackOps[0].Kind != migrate.OpDropIndex {
-		t.Fatalf("ops = %+v", rp.RollbackOps)
+	rb := rp.RollbackOps[0]
+	if rb.Kind != migrate.OpRenameColumn {
+		t.Errorf("expected OpRenameColumn, got %v", rb.Kind)
+	}
+	if rb.Before.Name != "new_name" || rb.After.Name != "old_name" {
+		t.Errorf("rename inversion failed: %s -> %s", rb.Before.Name, rb.After.Name)
 	}
 }
 
-func TestRollback_DropIndex_ReconstructsAddIndex(t *testing.T) {
+func TestRollback_AlterColumn_Nullability(t *testing.T) {
 	plan := &migrate.DiffPlan{
 		Operations: []migrate.Operation{
-			{Kind: migrate.OpDropIndex, Table: "users", Index: "idx_users_email",
-				IndexDef: &migrate.IndexModel{Name: "idx_users_email", Columns: []string{"email"}, Unique: true}},
+			{
+				Kind:   migrate.OpAlterColumn,
+				Table:  "users",
+				Before: &migrate.ColumnModel{Name: "email", Nullable: true},
+				After:  &migrate.ColumnModel{Name: "email", Nullable: false},
+			},
 		},
 	}
+
 	rp, _ := rollback.New("postgres").Build(plan, "")
-	if !strings.Contains(rp.RollbackOps[0].SQL, "CREATE UNIQUE INDEX") {
-		t.Errorf("expected reconstruction: %s", rp.RollbackOps[0].SQL)
+	rb := rp.RollbackOps[0]
+	if rb.Kind != migrate.OpAlterColumn {
+		t.Errorf("expected OpAlterColumn, got %v", rb.Kind)
+	}
+	if rb.After.Nullable != true {
+		t.Error("should invert NOT NULL back to NULLABLE")
 	}
 }

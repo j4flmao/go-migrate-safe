@@ -36,14 +36,17 @@ func readColumns(ctx context.Context, db *sql.DB, query string, args ...any) (ma
 		var nullable string
 		var defaultPtr *string
 		var colName, sqlType string
-		if err := rows.Scan(&colName, &sqlType, &nullable, &defaultPtr); err != nil {
+		var isPK, isAuto bool
+		if err := rows.Scan(&colName, &sqlType, &nullable, &defaultPtr, &isPK, &isAuto); err != nil {
 			return nil, nil, err
 		}
 		columns[colName] = &migrate.ColumnModel{
-			Name:     colName,
-			SQLType:  sqlType,
-			Nullable: nullable == "YES",
-			Default:  defaultPtr,
+			Name:          colName,
+			SQLType:       sqlType,
+			Nullable:      nullable == "YES" || nullable == "1" || nullable == "TRUE",
+			Default:       defaultPtr,
+			IsPK:          isPK,
+			AutoIncrement: isAuto,
 		}
 		order = append(order, colName)
 	}

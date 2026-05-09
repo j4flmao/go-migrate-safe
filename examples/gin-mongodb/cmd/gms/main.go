@@ -15,7 +15,12 @@ Usage:
 Commands:
   generate    Generate .json migration files from struct models
   apply       Apply pending migrations
+  status      Show current migration status
+  history     Show migration history
+  validate    Validate migration files
+  rollback    Rollback last migration
   seed        Seed initial data into database
+  studio      (Not yet supported for MongoDB)
 
 Environment:
   MONGODB_URI        MongoDB URI (default: mongodb://localhost:27017)
@@ -34,12 +39,12 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "generate":
-		internal.MigrateRun("generate", uri)
-	case "apply":
-		internal.MigrateRun("apply", uri)
+	case "generate", "apply", "status", "history", "validate", "rollback":
+		internal.MigrateRun(os.Args[1], uri)
 	case "seed":
 		internal.SeedRun(uri)
+	case "studio":
+		internal.StudioRun(uri, "", true)
 	default:
 		log.Printf("unknown command: %q", os.Args[1])
 		log.Print(usage)
