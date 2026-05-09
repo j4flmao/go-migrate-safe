@@ -6,6 +6,9 @@
 *.dylib
 bin/
 
+#Coverage
+coverage
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -29,3 +32,4 @@ examples/**/server.err
 
 # Docs (as requested)
 docs/
+
