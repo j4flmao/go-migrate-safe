@@ -10,6 +10,7 @@ Type-safe database migration library for Go — with auto struct-diff, dry-run, 
 - **Safety by default**: Destructive operations require explicit opt-in
 - **Rollback planning**: Every migration includes a rollback plan
 - **Dry run mode**: Test migrations before applying to production
+- **GMS Studio**: Built-in modern web UI for database browsing and management (CRUD)
 
 ## Installation
 
@@ -132,6 +133,26 @@ gms rollback
 | `validate`   | Validate all migration files                     |
 | `rollback`   | Rollback last N migrations                       |
 | `diff`       | Show what would change (no files written)        |
+| `studio`     | Launch the GMS Studio web UI to browse/edit DB   |
+
+## GMS Studio
+
+GMS Studio is a built-in web-based database explorer (inspired by Prisma Studio) that allows you to browse tables, view data, and perform CRUD operations directly from your browser.
+
+To launch it:
+```bash
+# It will auto-detect your DATABASE_URL
+gms studio
+
+# Or specify a driver and address
+gms studio --driver postgres --addr 127.0.0.1:4489
+```
+
+Features:
+- **Modern Dark UI**: Clean and responsive interface.
+- **CRUD Operations**: Add, edit, and delete records with a custom confirmation modal.
+- **Schema Awareness**: Automatically detects primary keys and data types for safe editing.
+- **Smart Paging**: Efficiently handle large tables with pagination and search.
 
 ## Supported Databases
 
