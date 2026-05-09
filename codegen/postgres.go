@@ -29,7 +29,7 @@ func RenderPostgres(op *migrate.Operation) (string, error) {
 	case migrate.OpAddIndex:
 		return renderPGAddIndex(op.Table, op.IndexDef), nil
 	case migrate.OpDropIndex:
-		return fmt.Sprintf("DROP INDEX IF EXISTS %s;", op.Index), nil
+		return fmt.Sprintf("DROP INDEX CONCURRENTLY IF EXISTS %s;", op.Index), nil
 	case migrate.OpAddConstraint:
 		return renderPGAddConstraint(op.Table, op.ConstraintDef)
 	case migrate.OpDropConstraint:
@@ -141,7 +141,7 @@ func renderPGAddIndex(table string, i *migrate.IndexModel) string {
 	if i.Unique {
 		uniq = "UNIQUE "
 	}
-	return fmt.Sprintf("CREATE %sINDEX IF NOT EXISTS %s ON %s (%s);", uniq, i.Name, table, strings.Join(i.Columns, ", "))
+	return fmt.Sprintf("CREATE %sINDEX CONCURRENTLY IF NOT EXISTS %s ON %s (%s);", uniq, i.Name, table, strings.Join(i.Columns, ", "))
 }
 
 func renderPGAddConstraint(table string, c *migrate.ConstraintModel) (string, error) {
@@ -151,8 +151,9 @@ func renderPGAddConstraint(table string, c *migrate.ConstraintModel) (string, er
 	switch c.Kind {
 	case migrate.ConstraintForeignKey:
 		return fmt.Sprintf(
-			"ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s);",
+			"ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) NOT VALID;\nALTER TABLE %s VALIDATE CONSTRAINT %s;",
 			table, c.Name, strings.Join(c.Columns, ", "), c.RefTable, strings.Join(c.RefColumns, ", "),
+			table, c.Name,
 		), nil
 	case migrate.ConstraintUnique:
 		return fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s UNIQUE (%s);",

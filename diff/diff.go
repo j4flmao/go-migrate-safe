@@ -356,30 +356,47 @@ func intPtrEq(a, b *int) bool {
 
 // isLossyTypeChange returns true when changing column type from a→b risks data loss.
 func isLossyTypeChange(a, b string) bool {
+	a = strings.ToUpper(a)
+	b = strings.ToUpper(b)
 	if a == b {
 		return false
 	}
+
+	// Numeric widening (safe)
 	rank := map[string]int{
-		"SMALLINT": 1, "INTEGER": 2, "BIGINT": 3,
-		"FLOAT": 1, "DOUBLE": 2,
+		"SMALLINT": 1, "INT2": 1,
+		"INTEGER": 2, "INT": 2, "INT4": 2,
+		"BIGINT": 3, "INT8": 3,
+		"FLOAT4": 4, "REAL": 4,
+		"FLOAT8": 5, "DOUBLE PRECISION": 5, "DOUBLE": 5,
 	}
+
 	if ar, ok := rank[a]; ok {
 		if br, ok := rank[b]; ok {
-			return br < ar // narrowing
+			return br < ar // narrowing is lossy
 		}
 	}
-	// Anything → smaller varchar is lossy; we can't know for sure without parsing,
-	// so default to "lossy" to be safe.
-	if strings.HasPrefix(a, "VARCHAR") && strings.HasPrefix(b, "VARCHAR") {
+
+	// String widening (safe)
+	if (strings.HasPrefix(a, "VARCHAR") || strings.HasPrefix(a, "CHAR")) &&
+		(strings.HasPrefix(b, "VARCHAR") || strings.HasPrefix(b, "CHAR") || b == "TEXT" || b == "LONGTEXT") {
+		if b == "TEXT" || b == "LONGTEXT" {
+			return false // widening to TEXT is always safe
+		}
 		return varcharSize(b) < varcharSize(a)
 	}
-	if a == "TEXT" && strings.HasPrefix(b, "VARCHAR") {
+
+	// TEXT to VARCHAR is lossy (truncation risk)
+	if (a == "TEXT" || a == "LONGTEXT") && (strings.HasPrefix(b, "VARCHAR") || strings.HasPrefix(b, "CHAR")) {
 		return true
 	}
-	if a == "TIMESTAMPTZ" && b == "TIMESTAMP" {
-		return true
+
+	// Date/Time safe conversions
+	if a == "DATE" && (b == "TIMESTAMP" || b == "TIMESTAMPTZ" || b == "DATETIME") {
+		return false
 	}
-	return true // unknown → assume lossy
+
+	return true // unknown -> assume lossy for safety
 }
 func varcharSize(s string) int {
 	open := strings.IndexByte(s, '(')
@@ -476,7 +493,7 @@ func computeRenameHints(drops, addsSafe, addsUnsafe []migrate.Operation) []migra
 			DroppedColumn: d.Column,
 			AddedColumn:   a.Column,
 			Confidence:    conf,
-			Reason: fmt.Sprintf("One column dropped (%s) and one added (%s) of same type %s", d.Column, a.Column, d.Before.SQLType),
+			Reason:        fmt.Sprintf("One column dropped (%s) and one added (%s) of same type %s", d.Column, a.Column, d.Before.SQLType),
 		})
 	}
 	return hints

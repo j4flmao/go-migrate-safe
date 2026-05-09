@@ -16,7 +16,12 @@ Usage:
 Commands:
   generate    Generate migration files from User/Product structs
   apply       Apply pending migrations
+  status      Show current migration status
+  history     Show migration history
+  validate    Validate migration files
+  rollback    Rollback last migration
   seed        Seed initial data into database
+  studio      Launch GMS Studio web UI to browse the database
 
 Environment:
   MYSQL_DSN    MySQL DSN (default: root@tcp(127.0.0.1:3306)/go_migrate_example)
@@ -34,12 +39,17 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "generate":
-		internal.MigrateRun("generate", dsn)
-	case "apply":
-		internal.MigrateRun("apply", dsn)
+	case "generate", "apply", "status", "history", "validate", "rollback":
+		internal.MigrateRun(os.Args[1], dsn)
 	case "seed":
 		internal.SeedRun(dsn)
+	case "studio":
+		addr := "127.0.0.1:4488"
+		if v := os.Getenv("STUDIO_ADDR"); v != "" {
+			addr = v
+		}
+		open := os.Getenv("STUDIO_NO_OPEN") == ""
+		internal.StudioRun(dsn, addr, open)
 	default:
 		log.Printf("unknown command: %q", os.Args[1])
 		log.Print(usage)

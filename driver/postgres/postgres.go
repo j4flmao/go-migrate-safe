@@ -60,14 +60,15 @@ func (d *Driver) ReleaseLock(ctx context.Context) error {
 func (d *Driver) EnsureHistoryTable(ctx context.Context) error {
 	_, err := d.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS _migrate_history (
-			version BIGINT PRIMARY KEY,
+			version BIGINT,
 			name TEXT NOT NULL,
 			direction TEXT NOT NULL,
 			checksum TEXT NOT NULL,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			execution_ms BIGINT NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'applied',
-			error_message TEXT
+			error_message TEXT,
+			PRIMARY KEY (version, applied_at)
 		)
 	`)
 	return err
@@ -111,4 +112,30 @@ func (d *Driver) Close() error {
 	return d.db.Close()
 }
 
+// Reset implements migrate.ShadowDriver.
+func (d *Driver) Reset(ctx context.Context) error {
+	// Drop all tables in the current schema (assuming public for simplicity, or we can use schema name)
+	// This is a destructive operation intended for shadow database only.
+	rows, err := d.db.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		tables = append(tables, name)
+	}
+	for _, t := range tables {
+		if _, err := d.db.ExecContext(ctx, "DROP TABLE IF EXISTS "+t+" CASCADE"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 var _ migrate.Driver = (*Driver)(nil)
+var _ migrate.ShadowDriver = (*Driver)(nil)

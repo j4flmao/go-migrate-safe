@@ -19,8 +19,8 @@ import (
 
 // Executor applies and rolls back migrations.
 type Executor struct {
-	D     driver.Driver
-	Now   func() time.Time
+	D      driver.Driver
+	Now    func() time.Time
 	DryRun bool
 }
 
@@ -143,7 +143,13 @@ func (e *Executor) Rollback(ctx context.Context, downFiles []store.File) (*Apply
 			res.EndedAt = e.Now()
 			return res, fmt.Errorf("rollback v%04d %q: %w", f.Version, f.Name, err)
 		}
-		_ = e.D.RecordMigration(ctx, rec)
+		// When a rollback is successful, we record it as 'rolled_back'
+		// Note: The history table will have both 'applied' and 'rolled_back' entries
+		// for the same version, which store.BuildStatus uses to determine the net status.
+		if err := e.D.RecordMigration(ctx, rec); err != nil {
+			res.Err = err
+			return res, fmt.Errorf("rollback v%04d: record: %w", f.Version, err)
+		}
 		res.Applied = append(res.Applied, f)
 	}
 	res.EndedAt = e.Now()

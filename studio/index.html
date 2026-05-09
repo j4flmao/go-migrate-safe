@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>GMS Studio</title>
+<style>
+  :root {
+    --bg:           #0b0d12;
+    --bg-elev:      #11141b;
+    --bg-elev-2:    #161a23;
+    --bg-row:       #11141b;
+    --bg-row-alt:   #0e1118;
+    --bg-row-hover: #1a1f2b;
+    --bg-row-sel:   #1d2738;
+    --border:       #1f2530;
+    --border-2:     #2a3140;
+    --text:         #e7ecf3;
+    --text-dim:     #8a93a6;
+    --text-muted:   #5b6273;
+    --accent:       #6aa3ff;
+    --accent-2:     #8b5cf6;
+    --accent-soft:  rgba(106,163,255,.12);
+    --green:        #4ade80;
+    --orange:       #fbbf24;
+    --pink:         #f472b6;
+    --red:          #f87171;
+    --shadow:       0 6px 18px rgba(0,0,0,.35);
+    --mono:         ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100vh; width: 100vw;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+  button { cursor: pointer; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    height: 100vh;
+  }
+
+  /* ── SIDEBAR ─────────────────────────────────────────────── */
+  .sidebar {
+    background: linear-gradient(180deg, #0c0f16 0%, #0a0c12 100%);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .brand {
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand .logo {
+    width: 26px; height: 26px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    display: grid; place-items: center;
+    font-weight: 700; color: white;
+    box-shadow: 0 4px 14px rgba(106,163,255,.35);
+  }
+  .brand .title {
+    font-weight: 600; letter-spacing: .2px;
+    font-size: 14px;
+  }
+  .brand .subtitle {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .conn {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .conn .row { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; }
+  .conn .k { color: var(--text-muted); }
+  .conn .v {
+    font-family: var(--mono);
+    color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 130px; text-align: right;
+  }
+  .conn .pill {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 999px;
+    font-family: var(--mono); font-size: 10.5px;
+    background: var(--accent-soft); color: var(--accent);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+
+  .search {
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+  }
+  .search input {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border .15s;
+  }
+  .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .tables {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px 16px 8px;
+  }
+  .group-label {
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-size: 10px; letter-spacing: 1px;
+    padding: 8px 10px 4px 10px;
+  }
+  .table-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    transition: background .12s, color .12s;
+  }
+  .table-item:hover { background: var(--bg-row-hover); color: var(--text); }
+  .table-item.active {
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .table-item .name { display: flex; align-items: center; gap: 8px; overflow: hidden; }
+  .table-item .name span {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .table-item .icon {
+    width: 14px; height: 14px; flex-shrink: 0; opacity: .8;
+  }
+  .table-item .count {
+    font-family: var(--mono);
+    font-size: 11px; color: var(--text-muted);
+  }
+  .table-item.active .count { color: var(--accent); opacity: .8; }
+
+  /* ── MAIN ────────────────────────────────────────────────── */
+  .main {
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  .tabs {
+    display: flex;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .tab .close {
+    opacity: 0; width: 14px; height: 14px;
+    border-radius: 4px;
+    display: grid; place-items: center;
+    transition: opacity .12s, background .12s;
+  }
+  .tab:hover .close, .tab.active .close { opacity: .6; }
+  .tab .close:hover { opacity: 1; background: var(--bg-row-hover); }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+  }
+  .btn {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-2);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 7px;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .12s, border-color .12s, transform .05s;
+  }
+  .btn:hover { background: var(--bg-row-hover); border-color: var(--accent); }
+  .btn:active { transform: translateY(1px); }
+  .btn.icon-only { padding: 6px 8px; }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: 1px solid transparent;
+    color: white;
+    box-shadow: 0 4px 12px rgba(106,163,255,.25);
+  }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.danger {
+    background: linear-gradient(135deg, var(--red), #ef4444);
+    border: 1px solid transparent;
+    color: white;
+    box-shadow: 0 4px 12px rgba(248,113,113,.25);
+  }
+  .btn.danger:hover { filter: brightness(1.1); }
+  .btn .label-dim { color: var(--text-muted); font-weight: 400; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .info {
+    font-family: var(--mono);
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .toolbar .info b { color: var(--text); font-weight: 500; }
+
+  /* ── DATA TABLE ──────────────────────────────────────────── */
+  .data-wrap {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg);
+  }
+  table.data {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+    font-size: 12.5px;
+  }
+  table.data thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--bg-elev);
+    color: var(--text);
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border-2);
+    border-right: 1px solid var(--border);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  table.data thead th .col-name { display: flex; align-items: center; gap: 6px; }
+  table.data thead th .badge {
+    display: inline-grid; place-items: center;
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    color: var(--text-muted);
+    background: var(--bg-elev-2);
+  }
+  table.data thead th .badge.num { color: var(--accent); }
+  table.data thead th .badge.text { color: var(--green); }
+  table.data thead th .badge.date { color: var(--orange); }
+  table.data thead th .badge.bool { color: var(--pink); }
+  table.data thead th .badge.pk { color: var(--accent-2); background: rgba(139,92,246,.12); }
+  table.data thead th .nullable { color: var(--text-muted); }
+  table.data thead th .typename {
+    color: var(--text-muted); font-family: var(--mono);
+    font-size: 10.5px; font-weight: 400;
+  }
+
+  table.data tbody tr {
+    background: var(--bg-row);
+    transition: background .08s;
+  }
+  table.data tbody tr:nth-child(even) { background: var(--bg-row-alt); }
+  table.data tbody tr:hover { background: var(--bg-row-hover); }
+  table.data tbody tr.selected { background: var(--bg-row-sel); }
+  table.data tbody td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    max-width: 320px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--mono);
+    color: var(--text);
+  }
+  table.data tbody td.null { color: var(--text-muted); font-style: italic; }
+  table.data tbody td.num { color: var(--accent); }
+  table.data tbody td.bool-true { color: var(--green); }
+  table.data tbody td.bool-false { color: var(--red); }
+
+  /* checkbox col */
+  table.data .check-col { width: 36px; text-align: center; }
+  table.data .check-col input { accent-color: var(--accent); }
+
+  /* ── STATES ──────────────────────────────────────────────── */
+  .splash {
+    flex: 1;
+    display: grid; place-items: center;
+    color: var(--text-muted);
+  }
+  .splash .inner { text-align: center; }
+  .splash h1 {
+    font-size: 22px; color: var(--text);
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0 0 4px 0;
+  }
+  .splash p { margin: 6px 0 0 0; }
+  .splash kbd {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .pagination {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .pagination .grow { flex: 1; }
+
+  .toast {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--red);
+    color: var(--red);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    box-shadow: var(--shadow);
+    max-width: 480px;
+  }
+
+  .icon { width: 14px; height: 14px; vertical-align: middle; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border-2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── MODAL (add record only) ────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.6);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    width: 520px;
+    max-width: 90vw;
+    max-height: 80vh;
+    display: flex; flex-direction: column;
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600; font-size: 14px;
+  }
+  .modal-header .close-btn {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: grid; place-items: center;
+    background: transparent; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 16px;
+  }
+  .modal-header .close-btn:hover { background: var(--bg-row-hover); color: var(--text); }
+  .modal-body {
+    flex: 1; overflow-y: auto;
+    padding: 18px;
+  }
+  .modal-footer {
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+  }
+  /* ── INLINE EDIT ─────────────────────────────────────────── */
+  table.data tbody td input, table.data tbody td select {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 3px 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  table.data tbody td input:focus, table.data tbody td select:focus {
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  table.data tbody td select { cursor: pointer; }
+  table.data tbody td input[type="checkbox"] {
+    width: auto;
+    padding: 0;
+    border: none;
+  }
+  .editing-row td { padding: 4px 8px; background: var(--bg-row-sel); }
+  .editing-row td .btn-save { color: var(--green); }
+  .editing-row td .btn-cancel { color: var(--red); }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+  .form-group label {
+    display: block;
+    font-size: 12px; color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .form-group label .hint {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-family: var(--mono);
+    font-size: 10.5px;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-2);
+    border-radius: 7px;
+    padding: 7px 10px;
+    outline: none;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+  .form-group .null-check {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 4px; font-size: 12px; color: var(--text-muted);
+  }
+  .form-group .null-check input { width: auto; }
+
+  /* Delete confirmation */
+  .confirm-text {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .confirm-text strong { color: var(--text); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #232a37; border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: #2e3647; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div>
+        <div class="title">GMS Studio</div>
+        <div class="subtitle">go-migrate-safe</div>
+      </div>
+    </div>
+    <div class="conn">
+      <div class="row"><span class="k">Driver</span> <span id="conn-driver" class="pill">…</span></div>
+      <div class="row"><span class="k">Schema</span> <span id="conn-schema" class="v">…</span></div>
+      <div class="row"><span class="k">Version</span> <span id="conn-version" class="v" title="">…</span></div>
+    </div>
+    <div class="search">
+      <input id="search" placeholder="Search tables…" />
+    </div>
+    <div class="tables" id="tables-list">
+      <div class="group-label">Tables</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="tabs" id="tabs"></div>
+    <div id="content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="splash" id="splash">
+        <div class="inner">
+          <h1>Welcome to GMS Studio</h1>
+          <p>Select a table from the left to start browsing.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<!-- Add Record Modal -->
+<div id="addModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="addModalTitle">Add Record</span>
+      <button class="close-btn" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="modal-body" id="addModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAddModal()">Cancel</button>
+      <button class="btn primary" onclick="saveAddRecord()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeConfirm(false)">
+  <div class="modal" style="width: 400px;">
+    <div class="modal-header">
+      <span id="confirmTitle">Confirm Action</span>
+      <button class="close-btn" onclick="closeConfirm(false)">✕</button>
+    </div>
+    <div class="modal-body" id="confirmBody" class="confirm-text">
+      Are you sure you want to proceed?
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirm(false)">Cancel</button>
+      <button id="confirmBtn" class="btn primary">Proceed</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  info: null,
+  tables: [],
+  open: [],         // [{name}]
+  active: null,     // table name
+  cache: {},        // name -> tableData
+  page: {},         // name -> {limit, offset}
+  selected: {},     // name -> Set<rowIndex>
+  editing: null,    // { name, index, pk } or null
+  confirmResolve: null, // resolver for confirm modal
+};
+
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const el = (tag, attrs={}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'html') e.innerHTML = v;
+    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids) {
+    if (k == null) continue;
+    e.appendChild(typeof k === 'string' ? document.createTextNode(k) : k);
+  }
+  return e;
+};
+
+const fmt = {
+  num: (n) => n.toLocaleString(),
+};
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=> t.style.display='none', 4500);
+}
+
+async function api(path) {
+  const res = await fetch(path);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+// ── Init ─────────────────────────────────────────
+async function init() {
+  try {
+    state.info = await api('/api/info');
+    $('#conn-driver').textContent = state.info.driver;
+    $('#conn-schema').textContent = state.info.schema || '—';
+    $('#conn-schema').title = state.info.schema || '';
+    const v = (state.info.version || '').split(/[\s,(]/)[0] || '—';
+    $('#conn-version').textContent = v;
+    $('#conn-version').title = state.info.version || '';
+  } catch(e) { toast('Failed to load info: ' + e.message); }
+  await loadTables();
+}
+
+async function loadTables() {
+  try {
+    state.tables = await api('/api/tables');
+    renderTables();
+  } catch(e) { toast('Failed to load tables: ' + e.message); }
+}
+
+function renderTables() {
+  const list = $('#tables-list');
+  list.innerHTML = '';
+  list.appendChild(el('div',{class:'group-label'},'Tables'));
+  const q = $('#search').value.trim().toLowerCase();
+  const items = state.tables.filter(t => !q || t.name.toLowerCase().includes(q));
+  if (!items.length) {
+    list.appendChild(el('div',{class:'group-label', style:'color:var(--text-muted)'}, q ? 'No matches' : 'No tables'));
+    return;
+  }
+  for (const t of items) {
+    const item = el('div',{class:'table-item' + (t.name === state.active ? ' active' : ''), onclick: () => openTable(t.name) },
+      el('div',{class:'name'},
+        el('span',{html: tableIconSVG()}),
+        el('span',{title: t.name}, t.name)
+      ),
+      el('span',{class:'count'}, fmt.num(t.rowCount))
+    );
+    list.appendChild(item);
+  }
+}
+
+$('#search').addEventListener('input', renderTables);
+
+// ── Tabs ─────────────────────────────────────────
+function openTable(name) {
+  if (!state.open.find(t => t.name === name)) state.open.push({name});
+  state.active = name;
+  state.page[name] = state.page[name] || {limit: 100, offset: 0};
+  renderTables();
+  renderTabs();
+  renderActive();
+}
+
+function closeTab(name, ev) {
+  ev && ev.stopPropagation();
+  state.open = state.open.filter(t => t.name !== name);
+  delete state.cache[name];
+  if (state.active === name) {
+    state.active = state.open.length ? state.open[state.open.length-1].name : null;
+  }
+  renderTables();
+  renderTabs();
+  renderActive();
+}
+
+function renderTabs() {
+  const tabs = $('#tabs');
+  tabs.innerHTML = '';
+  for (const t of state.open) {
+    tabs.appendChild(el('div',{class:'tab' + (t.name === state.active ? ' active' : ''), onclick: ()=>{ state.active = t.name; renderTabs(); renderActive(); }},
+      el('span', {html: tableIconSVG()}),
+      t.name,
+      el('span',{class:'close', onclick: (e)=>closeTab(t.name, e), html: closeIconSVG()})
+    ));
+  }
+}
+
+// ── Active view ──────────────────────────────────
+async function renderActive() {
+  const content = $('#content');
+  content.innerHTML = '';
+  if (!state.active) {
+    content.appendChild(el('div',{class:'splash'},
+      el('div',{class:'inner'},
+        el('h1', {}, 'Welcome to GMS Studio'),
+        el('p', {}, 'Select a table from the left to start browsing.')
+      )));
+    return;
+  }
+  const name = state.active;
+  // toolbar
+  const toolbar = el('div',{class:'toolbar'});
+  const refreshBtn = el('button',{class:'btn icon-only', title:'Refresh', onclick: ()=>refresh(name)}, el('span',{html: refreshIconSVG()}));
+  const filtersBtn = el('button',{class:'btn'}, el('span',{html: filterIconSVG()}), 'Filters', el('span',{class:'label-dim'}, 'None'));
+  const fieldsBtn  = el('button',{class:'btn'}, el('span',{html: columnsIconSVG()}), 'Fields', el('span',{class:'label-dim'}, 'All'));
+  const info = el('div',{class:'info', id:'rangeInfo'}, 'Loading…');
+  const addBtn = el('button',{class:'btn primary', onclick: ()=> openAddModal(name)}, el('span',{html: plusIconSVG()}), 'Add record');
+  const delSelBtn = el('button',{class:'btn', id:'delSelBtn', style:'display:none', onclick: ()=> deleteSelected(name)}, el('span',{html: trashIconSVG()}), 'Delete Selected');
+  toolbar.append(refreshBtn, filtersBtn, fieldsBtn, info, el('div',{class:'spacer'}), delSelBtn, addBtn);
+  content.appendChild(toolbar);
+
+  // body wrap
+  const wrap = el('div',{class:'data-wrap', id:'dataWrap'},
+    el('div',{class:'splash'}, el('div',{}, el('span',{class:'spinner'}), ' Loading…')));
+  content.appendChild(wrap);
+
+  // pagination
+  const pager = el('div',{class:'pagination', id:'pagerBar'});
+  content.appendChild(pager);
+
+  await loadAndRender(name);
+}
+
+async function loadAndRender(name) {
+  const page = state.page[name];
+  try {
+    const data = await api(`/api/table/${encodeURIComponent(name)}?limit=${page.limit}&offset=${page.offset}`);
+    state.cache[name] = data;
+    drawTable(data);
+  } catch(e) {
+    toast('Failed to load table: ' + e.message);
+    $('#dataWrap').innerHTML = '';
+    $('#dataWrap').appendChild(el('div',{class:'splash'}, el('div',{class:'inner'},
+      el('p',{style:'color:var(--red)'}, 'Error: ' + e.message))));
+  }
+}
+
+function refresh(name) {
+  delete state.cache[name];
+  loadAndRender(name);
+  loadTables();
+}
+
+function typeBadgeClass(t) {
+  const x = (t || '').toLowerCase();
+  if (/(int|serial|float|double|decimal|numeric|real|number)/.test(x)) return 'num';
+  if (/(char|text|uuid|json|enum|string)/.test(x)) return 'text';
+  if (/(date|time|stamp)/.test(x)) return 'date';
+  if (/(bool|bit)/.test(x)) return 'bool';
+  return '';
+}
+function typeBadgeChar(t) {
+  const cls = typeBadgeClass(t);
+  return cls === 'num' ? '#'
+       : cls === 'text' ? 'A'
+       : cls === 'date' ? '◷'
+       : cls === 'bool' ? '⊙'
+       : '?';
+}
+
+function drawTable(data) {
+  const wrap = $('#dataWrap');
+  wrap.innerHTML = '';
+  const table = el('table',{class:'data'});
+  const thead = el('thead');
+  const trh = el('tr');
+
+  // Select-all checkbox
+  const selAllCheck = el('input',{type:'checkbox', onchange: function(e) {
+    const checked = e.target.checked;
+    if (!state.selected[data.name]) state.selected[data.name] = new Set();
+    state.selected[data.name].clear();
+    if (checked) {
+      data.rows.forEach((_, idx) => state.selected[data.name].add(idx));
+    }
+    // Update all checkboxes
+    $$('.row-check', tbody).forEach(cb => cb.checked = checked);
+    updateDelBtn(data.name);
+  }});
+  trh.appendChild(el('th',{class:'check-col'}, selAllCheck));
+
+  for (const c of data.columns) {
+    const badgeClass = c.isPK ? 'pk' : typeBadgeClass(c.type);
+    const badgeChar = c.isPK ? '⚷' : typeBadgeChar(c.type);
+    trh.appendChild(el('th', {},
+      el('div',{class:'col-name'},
+        el('span',{class:'badge ' + badgeClass}, badgeChar),
+        c.name,
+        c.nullable ? el('span',{class:'nullable', title:'nullable'}, '?') : null,
+        el('span',{class:'typename'}, c.type)
+      )
+    ));
+  }
+  // Actions header
+  trh.appendChild(el('th',{style:'width:80px'}, ''));
+  thead.appendChild(trh);
+  table.appendChild(thead);
+
+  const tbody = el('tbody');
+  if (data.rows.length === 0) {
+    const tr = el('tr');
+    tr.appendChild(el('td',{colspan: data.columns.length+2, style:'padding:24px; text-align:center; color:var(--text-muted); font-style:italic;'}, 'No rows.'));
+    tbody.appendChild(tr);
+  }
+
+  if (!state.selected[data.name]) state.selected[data.name] = new Set();
+
+  for (let ri = 0; ri < data.rows.length; ri++) {
+    const row = data.rows[ri];
+    const isEditing = state.editing && state.editing.name === data.name && state.editing.index === ri;
+    const tr = el('tr');
+    tr.setAttribute('data-row-id', ri);
+    if (isEditing) tr.classList.add('editing-row');
+    const rowSel = state.selected && state.selected[data.name] && state.selected[data.name].has(ri);
+    if (rowSel) tr.classList.add('selected');
+
+    // Checkbox
+    const cb = el('input',{type:'checkbox', class:'row-check', checked: rowSel, onchange: function(e) {
+      if (e.target.checked) state.selected[data.name].add(ri);
+      else state.selected[data.name].delete(ri);
+      updateDelBtn(data.name);
+    }});
+    tr.appendChild(el('td',{class:'check-col'}, cb));
+
+    // PK info
+    const pk = {};
+    data.columns.forEach((c, i) => { if (c.isPK) pk[c.name] = row[i]; });
+    const hasPK = Object.keys(pk).length > 0;
+
+    // Data columns
+    row.forEach((v, i) => {
+      const c = data.columns[i];
+      const td = el('td');
+      td.setAttribute('data-col-pos', i);
+      let cls = '';
+      let text = '';
+      if (v === null || v === undefined) { cls = 'null'; text = 'null'; }
+      else if (typeof v === 'number') { cls = 'num'; text = String(v); }
+      else if (typeof v === 'boolean') { cls = v ? 'bool-true' : 'bool-false'; text = v ? 'true' : 'false'; }
+      else { text = String(v); }
+      td.className = cls + (isEditing && !c.isPK ? ' editable-cell' : '');
+      td.textContent = text;
+      td.title = text;
+
+      // Click non-PK cell to edit inline
+      if (hasPK && !c.isPK) {
+        td.style.cursor = 'pointer';
+        td.addEventListener('click', function(e) {
+          if (e.target.closest('input') || e.target.closest('select')) return;
+          if (state.editing && state.editing.name === data.name && state.editing.index === ri) {
+            // Already editing this row — replace just this cell
+            makeCellEditable(td, c, v);
+          } else {
+            // Start editing this row
+            state.editing = { name: data.name, index: ri, pk };
+            // Update actions cell for this row
+            const atd = tr.querySelector('.actions-cell');
+            if (atd) {
+              atd.innerHTML = '';
+              atd.appendChild(el('button',{class:'btn', style:'color:var(--green);padding:4px 8px', onclick: (e2)=>{ e2.stopPropagation(); saveEditing(data.name); }}, 'Save'));
+              atd.appendChild(el('button',{class:'btn', style:'color:var(--red);padding:4px 8px;margin-left:4px', onclick: (e2)=>{ e2.stopPropagation(); cancelEditing(data.name); }}, 'Cancel'));
+            }
+            tr.classList.add('editing-row');
+            makeCellEditable(td, c, v);
+          }
+        });
+      }
+      tr.appendChild(td);
+    });
+
+    // Action buttons
+    const actionTd = el('td',{style:'white-space:nowrap; padding:4px 8px', class:'actions-cell'});
+    if (isEditing && hasPK) {
+      actionTd.appendChild(el('button',{class:'btn', style:'color:var(--green);padding:4px 8px', onclick: (e)=>{ e.stopPropagation(); saveEditing(data.name); }}, 'Save'));
+      actionTd.appendChild(el('button',{class:'btn', style:'color:var(--red);padding:4px 8px;margin-left:4px', onclick: (e)=>{ e.stopPropagation(); cancelEditing(data.name); }}, 'Cancel'));
+    } else if (hasPK) {
+      actionTd.appendChild(el('button',{class:'btn icon-only', title:'Delete', onclick: (e)=>{ e.stopPropagation(); deleteRecord(data.name, pk); }}, el('span',{html: trashIconSVG()})));
+    }
+    tr.appendChild(actionTd);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+
+  // info + pager
+  const page = state.page[data.name];
+  const start = data.total === 0 ? 0 : page.offset + 1;
+  const end   = page.offset + data.rows.length;
+  $('#rangeInfo').innerHTML = `Showing <b>${fmt.num(start)}–${fmt.num(end)}</b> of <b>${fmt.num(data.total)}</b>`;
+  const pager = $('#pagerBar');
+  pager.innerHTML = '';
+  pager.append(
+    el('span',{}, `Page size: `),
+    pageSizeSelect(data.name, page.limit),
+    el('span',{class:'grow'}),
+    el('span',{}, `${fmt.num(start)}–${fmt.num(end)} of ${fmt.num(data.total)}`),
+    pageBtn('« First', page.offset === 0, () => { page.offset = 0; loadAndRender(data.name); }),
+    pageBtn('‹ Prev',  page.offset === 0, () => { page.offset = Math.max(0, page.offset - page.limit); loadAndRender(data.name); }),
+    pageBtn('Next ›',  end >= data.total, () => { page.offset = page.offset + page.limit; loadAndRender(data.name); }),
+    pageBtn('Last »',  end >= data.total, () => { page.offset = Math.max(0, Math.floor((data.total-1)/page.limit) * page.limit); loadAndRender(data.name); }),
+    el('span',{style:'margin-left:10px; opacity:.6'}, `(${data.took})`)
+  );
+}
+
+function pageSizeSelect(name, current) {
+  const sel = el('select',{class:'btn', style:'padding:4px 8px', onchange: (e)=>{
+    const page = state.page[name];
+    page.limit = parseInt(e.target.value, 10);
+    page.offset = 0;
+    loadAndRender(name);
+  }});
+  for (const n of [25, 50, 100, 250, 500]) {
+    const o = el('option',{value: n}, String(n));
+    if (n === current) o.selected = true;
+    sel.appendChild(o);
+  }
+  return sel;
+}
+function pageBtn(label, disabled, onclick) {
+  const b = el('button',{class:'btn', onclick}, label);
+  if (disabled) { b.disabled = true; b.style.opacity = .35; b.style.cursor = 'not-allowed'; b.onclick = null; }
+  return b;
+}
+
+// ── CRUD Helpers ─────────────────────────────────
+function updateDelBtn(name) {
+  const btn = $('#delSelBtn');
+  if (!btn) return;
+  const sel = state.selected[name];
+  const count = sel ? sel.size : 0;
+  btn.style.display = count > 0 ? 'inline-flex' : 'none';
+  btn.innerHTML = '';
+  btn.appendChild(el('span',{html: trashIconSVG()}));
+  btn.appendChild(document.createTextNode(' Delete (' + count + ')'));
+}
+
+function pkFromRow(row, cols) {
+  const pk = {};
+  cols.forEach((c, i) => { if (c.isPK) pk[c.name] = row[i]; });
+  return pk;
+}
+
+function colInputType(c) {
+  const t = c.type.toLowerCase();
+  if (c.enumValues && c.enumValues.length > 0) return 'enum';
+  if (/(int|serial|float|double|decimal|numeric|real|number)/.test(t)) return 'number';
+  if (/(bool|bit)/.test(t)) return 'checkbox';
+  if (/(date|time|stamp)/.test(t)) return 'datetime-local';
+  return 'text';
+}
+
+// ── Add Modal ────────────────────────────────────
+function openAddModal(name) {
+  const data = state.cache[name];
+  if (!data) return;
+  const body = $('#addModalBody');
+  body.innerHTML = '';
+  $('#addModalTitle').textContent = 'Add Record — ' + name;
+  for (const c of data.columns) {
+    if (c.isPK && c.autoIncrement) continue;
+    const grp = el('div',{class:'form-group'});
+    grp.appendChild(el('label',{}, c.name, ' ', el('span',{class:'hint'}, '(' + c.type + (c.nullable ? ', nullable' : '') + ')')));
+    const itype = colInputType(c);
+    if (itype === 'enum') {
+      const sel = el('select',{name: 'add_'+c.name});
+      if (c.nullable) sel.appendChild(el('option',{value: ''}, '(null)'));
+      for (const ev of c.enumValues) sel.appendChild(el('option',{value: ev}, ev));
+      grp.appendChild(sel);
+    } else if (itype === 'checkbox') {
+      grp.appendChild(el('input',{type:'checkbox', name: 'add_'+c.name}));
+    } else {
+      const inp = el('input',{type: itype, name: 'add_'+c.name, step: itype==='number'?'any':undefined});
+      grp.appendChild(inp);
+    }
+    body.appendChild(grp);
+  }
+  $('#addModal').style.display = 'flex';
+}
+
+function closeAddModal() {
+  $('#addModal').style.display = 'none';
+}
+
+function showConfirm(title, message, btnText='Proceed', btnClass='primary') {
+  return new Promise(resolve => {
+    $('#confirmTitle').textContent = title;
+    $('#confirmBody').textContent = message;
+    const btn = $('#confirmBtn');
+    btn.textContent = btnText;
+    btn.className = 'btn ' + btnClass;
+    btn.onclick = () => closeConfirm(true);
+    state.confirmResolve = resolve;
+    $('#confirmModal').style.display = 'flex';
+  });
+}
+
+function closeConfirm(ok) {
+  $('#confirmModal').style.display = 'none';
+  if (state.confirmResolve) {
+    state.confirmResolve(ok);
+    state.confirmResolve = null;
+  }
+}
+
+async function saveAddRecord() {
+  const name = state.active;
+  if (!name) return;
+  const data = state.cache[name];
+  if (!data) return;
+  const values = {};
+  for (const c of data.columns) {
+    if (c.isPK && c.autoIncrement) continue;
+    const inp = document.querySelector('[name="add_'+c.name+'"]');
+    if (!inp) continue;
+    if (inp.type === 'checkbox') values[c.name] = inp.checked;
+    else if (inp.type === 'number') values[c.name] = inp.value ? (inp.value.includes('.') ? parseFloat(inp.value) : parseInt(inp.value, 10)) : null;
+    else values[c.name] = inp.value || null;
+  }
+  try {
+    await apiPost('/api/table/' + encodeURIComponent(name) + '/insert', { values });
+    closeAddModal();
+    refresh(name);
+  } catch(e) { toast('Failed: ' + e.message); }
+}
+
+// ── Inline Editing (per-cell) ────────────────────
+function makeCellEditable(td, c, v) {
+  const itype = colInputType(c);
+  if (itype === 'enum' && c.enumValues) {
+    const sel = el('select',{'data-col':c.name});
+    for (const ev of c.enumValues) {
+      const opt = el('option',{value: ev}, ev);
+      if (String(v) === ev) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    td.textContent = '';
+    td.appendChild(sel);
+    sel.focus();
+  } else if (itype === 'checkbox') {
+    td.textContent = '';
+    td.appendChild(el('input',{type:'checkbox', 'data-col':c.name, checked: v === true || v === 1}));
+  } else if (itype === 'datetime-local') {
+    const inp = el('input',{type:'datetime-local', 'data-col':c.name, step:'1'});
+    if (v !== null && v !== undefined) {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) {
+        const pad = (n)=>String(n).padStart(2,'0');
+        inp.value = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+      }
+    }
+    td.textContent = '';
+    td.appendChild(inp);
+    inp.focus();
+  } else {
+    const inp = el('input',{type: itype, 'data-col':c.name, step: itype==='number'?'any':undefined});
+    if (v !== null && v !== undefined) inp.value = String(v);
+    td.textContent = '';
+    td.appendChild(inp);
+    inp.focus();
+    inp.select();
+  }
+}
+
+function cancelEditing(name) {
+  state.editing = null;
+  loadAndRender(name);
+}
+
+async function saveEditing(name) {
+  const ed = state.editing;
+  if (!ed) return;
+  const data = state.cache[name];
+  if (!data) return;
+  const tr = document.querySelector(`tr[data-row-id="${ed.index}"]`);
+  if (!tr) return;
+  const values = {};
+  for (const c of data.columns) {
+    if (c.isPK) continue;
+    const inp = tr.querySelector(`[data-col="${c.name}"]`);
+    if (!inp) continue;
+    const itype = colInputType(c);
+    if (itype === 'checkbox') values[c.name] = inp.checked;
+    else if (itype === 'enum' || inp.tagName === 'SELECT') values[c.name] = inp.value || null;
+    else if (inp.type === 'number' && inp.value.trim() !== '') values[c.name] = inp.value.includes('.') ? parseFloat(inp.value) : parseInt(inp.value, 10);
+    else values[c.name] = inp.value.trim() || null;
+  }
+  try {
+    await apiPost('/api/table/' + encodeURIComponent(name) + '/update', { values, pk: ed.pk });
+    state.editing = null;
+    refresh(name);
+  } catch(e) { toast('Update failed: ' + e.message); }
+}
+
+async function deleteRecord(name, pk) {
+  const ok = await showConfirm('Delete Record', 'Are you sure you want to delete this record? This action cannot be undone.', 'Delete', 'danger');
+  if (!ok) return;
+  try {
+    await apiPost('/api/table/' + encodeURIComponent(name) + '/delete', { pks: [pk] });
+    refresh(name);
+  } catch(e) { toast('Delete failed: ' + e.message); }
+}
+
+async function deleteSelected(name) {
+  const sel = state.selected[name];
+  if (!sel || sel.size === 0) return;
+  const ok = await showConfirm('Delete Selected', `Are you sure you want to delete ${sel.size} selected record(s)?`, 'Delete All', 'danger');
+  if (!ok) return;
+  const data = state.cache[name];
+  if (!data) return;
+  const pks = [];
+  for (const idx of sel) {
+    pks.push(pkFromRow(data.rows[idx], data.columns));
+  }
+  try {
+    await apiPost('/api/table/' + encodeURIComponent(name) + '/delete', { pks });
+    state.selected[name].clear();
+    refresh(name);
+  } catch(e) { toast('Delete failed: ' + e.message); }
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+// ── Icons (inline SVG) ───────────────────────────
+function tableIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 7h12M2 10h12M6 3v10"/></svg>`; }
+function refreshIconSVG() { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 3v3h-3"/><path d="M13 8a5 5 0 0 1-8.5 3.5L3 10"/><path d="M3 13v-3h3"/></svg>`; }
+function filterIconSVG()  { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12l-4.5 5v4l-3 1.5V9z"/></svg>`; }
+function columnsIconSVG() { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="3.5" height="10" rx="1"/><rect x="6.25" y="3" width="3.5" height="10" rx="1"/><rect x="10.5" y="3" width="3.5" height="10" rx="1"/></svg>`; }
+function plusIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>`; }
+function closeIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>`; }
+function editIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 2l3 3-9 9H2v-3z"/></svg>`; }
+function trashIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M4 4l.7 9.3a1 1 0 0 0 1 .7h4.6a1 1 0 0 0 1-.7L12 4M6 7v5M10 7v5"/></svg>`; }
+
+init();
+</script>
+</body>
+</html>

@@ -40,7 +40,13 @@ func (r *MySQLReader) ReadSchema(ctx context.Context, schema string) (*migrate.S
 	for _, tn := range tableNames {
 		tbl := migrate.NewTableModel(tn)
 		cols, order, err := readColumns(ctx, r.db,
-			`SELECT column_name, data_type, is_nullable, column_default
+			`SELECT 
+				column_name, 
+				data_type, 
+				is_nullable, 
+				column_default,
+				(column_key = 'PRI') as is_pk,
+				(extra = 'auto_increment') as is_auto
 			 FROM information_schema.columns
 			 WHERE table_schema = ? AND table_name = ?
 			 ORDER BY ordinal_position`, schema, tn)
