@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>GMS Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-node-html-label@1.2.2/dist/cytoscape-node-html-label.min.js"></script>
 <style>
   :root {
     --bg:           #0b0d12;
@@ -329,6 +333,80 @@
   }
   .pagination .grow { flex: 1; }
 
+  /* ── ERD VIEW ────────────────────────────────────────────── */
+  .erd-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background: #0d1117;
+    position: relative;
+    overflow: hidden;
+  }
+  #erd-canvas {
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* ERD Node Style */
+  .erd-table {
+    background: #161a23;
+    border: 1.5px solid #3d4455;
+    border-radius: 6px;
+    color: #e7ecf3;
+    font-family: var(--mono);
+    font-size: 11px;
+    width: 220px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  .erd-table-header {
+    background: #2a3140;
+    padding: 8px 12px;
+    font-weight: 700;
+    font-size: 12px;
+    border-bottom: 1.5px solid #3d4455;
+    color: #6aa3ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .erd-table-body {
+    padding: 6px 0;
+  }
+  .erd-column {
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .erd-column:hover {
+    background: rgba(106,163,255,0.08);
+  }
+  .erd-col-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .erd-col-type {
+    color: #8a93a6;
+    font-size: 10px;
+  }
+  .erd-pk-icon {
+    color: #fbbf24;
+    font-size: 10px;
+  }
+
+  .erd-toolbar {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+  }
+
   .toast {
     position: fixed; bottom: 16px; right: 16px;
     background: var(--bg-elev-2);
@@ -617,6 +695,17 @@ async function loadTables() {
 function renderTables() {
   const list = $('#tables-list');
   list.innerHTML = '';
+  
+  // Visualizations Group
+  list.appendChild(el('div',{class:'group-label'},'Visualizations'));
+  const erdItem = el('div',{class:'table-item' + (state.active === '@erd' ? ' active' : ''), onclick: () => openERD() },
+    el('div',{class:'name'},
+      el('span',{html: erdIconSVG()}),
+      el('span',{}, 'ERD Diagram')
+    )
+  );
+  list.appendChild(erdItem);
+
   list.appendChild(el('div',{class:'group-label'},'Tables'));
   const q = $('#search').value.trim().toLowerCase();
   const items = state.tables.filter(t => !q || t.name.toLowerCase().includes(q));
@@ -663,7 +752,18 @@ function closeTab(name, ev) {
 function renderTabs() {
   const tabs = $('#tabs');
   tabs.innerHTML = '';
+  
+  // Permanent ERD tab if it was opened
+  if (state.open.find(t => t.name === '@erd')) {
+    tabs.appendChild(el('div',{class:'tab' + (state.active === '@erd' ? ' active' : ''), onclick: ()=>{ state.active = '@erd'; renderTabs(); renderActive(); }},
+      el('span', {html: erdIconSVG()}),
+      'ERD Diagram',
+      el('span',{class:'close', onclick: (e)=>closeTab('@erd', e), html: closeIconSVG()})
+    ));
+  }
+
   for (const t of state.open) {
+    if (t.name === '@erd') continue;
     tabs.appendChild(el('div',{class:'tab' + (t.name === state.active ? ' active' : ''), onclick: ()=>{ state.active = t.name; renderTabs(); renderActive(); }},
       el('span', {html: tableIconSVG()}),
       t.name,
@@ -684,6 +784,12 @@ async function renderActive() {
       )));
     return;
   }
+
+  if (state.active === '@erd') {
+    await renderERD();
+    return;
+  }
+
   const name = state.active;
   // toolbar
   const toolbar = el('div',{class:'toolbar'});
@@ -1125,6 +1231,143 @@ function plusIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="
 function closeIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>`; }
 function editIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 2l3 3-9 9H2v-3z"/></svg>`; }
 function trashIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M4 4l.7 9.3a1 1 0 0 0 1 .7h4.6a1 1 0 0 0 1-.7L12 4M6 7v5M10 7v5"/></svg>`; }
+function erdIconSVG()     { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="5" height="4.5" rx="1"/><rect x="9" y="8.5" width="5" height="4.5" rx="1"/><rect x="9" y="3" width="5" height="4.5" rx="1"/><path d="M7 5.25h2M11.5 7.5v1M5 7.5v3.5a1 1 0 0 0 1 1h3"/></svg>`; }
+
+function openERD() {
+  if (!state.open.find(t => t.name === '@erd')) state.open.push({name: '@erd'});
+  state.active = '@erd';
+  renderTables();
+  renderTabs();
+  renderActive();
+}
+
+async function renderERD() {
+  const content = $('#content');
+  content.innerHTML = '';
+  
+  const container = el('div', {class: 'erd-container'},
+    el('div', {id: 'erd-canvas'}),
+    el('div', {class: 'erd-toolbar'},
+      el('button', {class: 'btn', onclick: () => cytoscapeInstance.layout({name: 'dagre'}).run()}, 'Auto Layout'),
+      el('button', {class: 'btn', onclick: () => cytoscapeInstance.fit()}, 'Fit View')
+    )
+  );
+  content.appendChild(container);
+
+  const elements = [];
+  // Build Nodes (Tables)
+  for (const t of state.tables) {
+    try {
+      const data = await api(`/api/table/${encodeURIComponent(t.name)}?limit=1`);
+      
+      // HTML for columns
+      const colHtml = data.columns.map(c => `
+        <div class="erd-column">
+          <span class="erd-pk-icon">${c.isPK ? '🔑' : '&nbsp;&nbsp;'}</span>
+          <span class="erd-col-name">${c.name}</span>
+          <span class="erd-col-type">${c.type.split('(')[0]}</span>
+        </div>
+      `).join('');
+
+      elements.push({
+        data: { 
+          id: t.name, 
+          label: t.name,
+          html: `
+            <div class="erd-table">
+              <div class="erd-table-header">
+                <span>${t.name}</span>
+                <span style="opacity:0.5; font-size:9px">#${data.total}</span>
+              </div>
+              <div class="erd-table-body">
+                ${colHtml}
+              </div>
+            </div>
+          `,
+          colCount: data.columns.length
+        }
+      });
+      
+      // Build Edges (Foreign Keys)
+      if (data.constraints) {
+        for (const cname in data.constraints) {
+          const c = data.constraints[cname];
+          if (c.kind === 'FOREIGN_KEY' || c.kind === 2) { // 2 is migrate.ConstraintForeignKey
+            elements.push({
+              data: {
+                id: cname,
+                source: t.name,
+                target: c.refTable,
+                label: c.columns.join(', ') + ' → ' + c.refColumns.join(', ')
+              }
+            });
+          }
+        }
+      }
+    } catch(e) {
+      console.error('Failed to load table info for ERD:', e);
+    }
+  }
+
+  cytoscape.use(cytoscapeDagre);
+  
+  window.cytoscapeInstance = cytoscape({
+    container: document.getElementById('erd-canvas'),
+    elements: elements,
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'width': '220px',
+          'height': (ele) => (40 + (ele.data('colCount') * 22)) + 'px',
+          'shape': 'rectangle',
+          'background-opacity': 0,
+          'border-width': 0,
+          'label': '' // Label is handled by HTML plugin
+        }
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 2,
+          'line-color': '#6aa3ff',
+          'target-arrow-color': '#6aa3ff',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'taxi',
+          'taxi-direction': 'auto',
+          'label': 'data(label)',
+          'font-size': '9px',
+          'color': '#8a93a6',
+          'text-rotation': 'autorotate',
+          'text-background-opacity': 1,
+          'text-background-color': '#0d1117',
+          'text-background-padding': '2px'
+        }
+      }
+    ],
+    layout: {
+      name: 'dagre',
+      padding: 50
+    }
+  });
+
+  // Initialize HTML Label plugin
+  window.cytoscapeInstance.nodeHtmlLabel([
+    {
+      query: 'node',
+      halign: 'center',
+      valign: 'center',
+      halignBox: 'center',
+      valignBox: 'center',
+      tpl: (data) => data.html
+    }
+  ]);
+
+  window.cytoscapeInstance.on('tap', 'node', function(evt){
+    const node = evt.target;
+    openTable(node.id());
+  });
+}
 
 init();
 </script>

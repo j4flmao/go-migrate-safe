@@ -105,7 +105,44 @@ func (r *SQLiteReader) ReadSchema(ctx context.Context, schema string) (*migrate.
 			}
 		}
 
+		// Read Foreign Keys
+		fks, err := readSQLiteFKs(ctx, r.db, tn)
+		if err == nil {
+			for name, fk := range fks {
+				tbl.Constraints[name] = fk
+			}
+		}
+
 		sm.Tables[tn] = tbl
 	}
 	return sm, nil
+}
+
+func readSQLiteFKs(ctx context.Context, db *sql.DB, table string) (map[string]*migrate.ConstraintModel, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list('%s')", table))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fks := map[string]*migrate.ConstraintModel{}
+	for rows.Next() {
+		var id, seq int
+		var refTable, fromCol, toCol, onUpdate, onDelete, match string
+		if err := rows.Scan(&id, &seq, &refTable, &fromCol, &toCol, &onUpdate, &onDelete, &match); err != nil {
+			return nil, err
+		}
+
+		name := fmt.Sprintf("fk_%s_%s_%d", table, refTable, id)
+		if _, ok := fks[name]; !ok {
+			fks[name] = &migrate.ConstraintModel{
+				Name:     name,
+				Kind:     migrate.ConstraintForeignKey,
+				RefTable: refTable,
+			}
+		}
+		fks[name].Columns = append(fks[name].Columns, fromCol)
+		fks[name].RefColumns = append(fks[name].RefColumns, toCol)
+	}
+	return fks, nil
 }

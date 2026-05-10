@@ -172,14 +172,15 @@ type columnDef struct {
 }
 
 type tableData struct {
-	Name    string         `json:"name"`
-	Columns []columnDef    `json:"columns"`
-	Rows    [][]any        `json:"rows"`
-	Total   int64          `json:"total"`
-	Limit   int            `json:"limit"`
-	Offset  int            `json:"offset"`
-	Took    string         `json:"took"`
-	Indexes []indexSummary `json:"indexes"`
+	Name        string                              `json:"name"`
+	Columns     []columnDef                         `json:"columns"`
+	Rows        [][]any                             `json:"rows"`
+	Total       int64                               `json:"total"`
+	Limit       int                                 `json:"limit"`
+	Offset      int                                 `json:"offset"`
+	Took        string                              `json:"took"`
+	Indexes     []indexSummary                      `json:"indexes"`
+	Constraints map[string]*migrate.ConstraintModel `json:"constraints,omitempty"`
 }
 
 type indexSummary struct {
@@ -283,14 +284,15 @@ func (s *Server) handleTableData(w http.ResponseWriter, r *http.Request, name st
 	took := time.Since(start)
 
 	writeJSON(w, http.StatusOK, tableData{
-		Name:    name,
-		Columns: cols,
-		Rows:    rows,
-		Total:   total,
-		Limit:   limit,
-		Offset:  offset,
-		Took:    took.String(),
-		Indexes: idx,
+		Name:        name,
+		Columns:     cols,
+		Rows:        rows,
+		Total:       total,
+		Limit:       limit,
+		Offset:      offset,
+		Took:        took.String(),
+		Indexes:     idx,
+		Constraints: tbl.Constraints,
 	})
 }
 
