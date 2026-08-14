@@ -59,7 +59,7 @@ func (r *MySQLReader) ReadSchema(ctx context.Context, schema string) (*migrate.S
 		indexes, err := readIndexes(ctx, r.db,
 			`SELECT index_name, column_name, non_unique=0
 			 FROM information_schema.statistics
-			 WHERE table_schema = ? AND table_name = ?`, schema, tn)
+			 WHERE table_schema = ? AND table_name = ? AND index_name != 'PRIMARY'`, schema, tn)
 		if err != nil {
 			return nil, fmt.Errorf("mysql reader: read indexes for %s: %w", tn, err)
 		}

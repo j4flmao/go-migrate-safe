@@ -12,6 +12,8 @@ func RenderMongoDB(op *migrate.Operation) (string, error) {
 		return renderMongoCreateCollection(op), nil
 	case migrate.OpDropTable:
 		return fmt.Sprintf(`{"drop": %q}`, op.Table), nil
+	case migrate.OpRenameTable:
+		return fmt.Sprintf(`{"renameCollection": %q, "to": %q}`, op.Table, op.NewTable.Name), nil
 	case migrate.OpAddIndex:
 		return renderMongoAddIndex(op), nil
 	case migrate.OpDropIndex:

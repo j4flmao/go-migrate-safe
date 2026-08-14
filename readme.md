@@ -164,18 +164,22 @@ Features:
 
 ## Struct Tags
 
-| Tag Option     | Description                                      |
-|----------------|--------------------------------------------------|
-| `pk`           | Mark as primary key                              |
-| `autoincrement`| Auto-incrementing primary key                    |
-| `unique`       | Unique constraint                                |
-| `index`        | Create index                                     |
-| `not null`     | Not null constraint                              |
-| `nullable`     | Nullable field                                   |
-| `default:X`    | Default value                                    |
-| `size:N`       | Column size (for VARCHAR, etc.)                  |
-| `type:T`       | Override SQL type                                |
-| `ignore`       | Ignore this field                                |
+| Tag Option       | Description                                      |
+|------------------|--------------------------------------------------|
+| `table:name`     | Override table name (use on dummy `_ struct{}`)  |
+| `table_old_name` | Old table name for renaming (use on dummy struct)|
+| `pk`             | Mark as primary key                              |
+| `autoincrement`  | Auto-incrementing primary key                    |
+| `unique`         | Unique constraint                                |
+| `index`          | Create index                                     |
+| `not null`       | Not null constraint                              |
+| `nullable`       | Nullable field                                   |
+| `default:X`      | Default value                                    |
+| `size:N`         | Column size (for VARCHAR, etc.)                  |
+| `type:T`         | Override SQL type                                |
+| `old_name:X`     | Old column name for renaming                     |
+| `check:expr`     | Check constraint (e.g. `check:price >= 0`)       |
+| `ignore`         | Ignore this field                                |
 
 ## Configuration
 

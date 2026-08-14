@@ -8,6 +8,108 @@ import (
 )
 
 // RenderMySQL emits MySQL DDL for a single operation.
+func RenderMySQLBatch(ops []migrate.Operation) []string {
+	if len(ops) == 0 {
+		return nil
+	}
+
+	var results []string
+	type alterGroup struct {
+		table string
+		parts []string
+	}
+	var currentAlter *alterGroup
+
+	flush := func() {
+		if currentAlter != nil && len(currentAlter.parts) > 0 {
+			results = append(results, fmt.Sprintf("ALTER TABLE %s\n    %s;", currentAlter.table, strings.Join(currentAlter.parts, ",\n    ")))
+			currentAlter = nil
+		}
+	}
+
+	for i := range ops {
+		op := &ops[i]
+		canBatch := false
+		var part string
+
+		switch op.Kind {
+		case migrate.OpAddColumn:
+			canBatch = true
+			part = "ADD COLUMN " + mysqlAddColumnPart(op.After)
+		case migrate.OpDropColumn:
+			canBatch = true
+			part = fmt.Sprintf("DROP COLUMN %s", op.Column)
+		case migrate.OpAlterColumn:
+			canBatch = true
+			part = "MODIFY COLUMN " + mysqlAlterColumnPart(op)
+		case migrate.OpRenameColumn:
+			canBatch = true
+			part = fmt.Sprintf("RENAME COLUMN %s TO %s", op.Before.Name, op.After.Name)
+		case migrate.OpDropConstraint:
+			canBatch = true
+			name := ""
+			if op.ConstraintDef != nil {
+				name = op.ConstraintDef.Name
+			}
+			part = fmt.Sprintf("DROP CONSTRAINT %s", name)
+		}
+
+		if canBatch {
+			if currentAlter != nil && currentAlter.table != op.Table {
+				flush()
+			}
+			if currentAlter == nil {
+				currentAlter = &alterGroup{table: op.Table}
+			}
+			currentAlter.parts = append(currentAlter.parts, part)
+		} else {
+			flush()
+			sql, _ := RenderMySQL(op)
+			if sql != "" {
+				results = append(results, sql)
+			}
+		}
+	}
+	flush()
+	return results
+}
+
+func mysqlAddColumnPart(c *migrate.ColumnModel) string {
+	parts := []string{c.Name, mysqlColumnType(c)}
+	extrasParts := []string{}
+	if !c.Nullable {
+		extrasParts = append(extrasParts, "NOT NULL")
+	}
+	if c.Default != nil {
+		extrasParts = append(extrasParts, "DEFAULT "+mysqlDefaultValue(c))
+	} else if !c.Nullable {
+		extrasParts = append(extrasParts, "DEFAULT NULL")
+	}
+	if len(extrasParts) > 0 {
+		parts = append(parts, strings.Join(extrasParts, " "))
+	}
+	return strings.Join(parts, " ")
+}
+
+func mysqlAlterColumnPart(op *migrate.Operation) string {
+	b := op.After
+	parts := []string{op.Column, b.SQLType}
+	if !b.Nullable {
+		parts = append(parts, "NOT NULL")
+	} else {
+		parts = append(parts, "NULL")
+	}
+	if b.Default != nil {
+		def := *b.Default
+		if isStringType(b.SQLType) && !looksSQLFunction(def) {
+			def = "'" + def + "'"
+		}
+		parts = append(parts, "DEFAULT "+def)
+	}
+	return strings.Join(parts, " ")
+}
+
+// RenderMySQL emits MySQL DDL for a single operation.
 func RenderMySQL(op *migrate.Operation) (string, error) {
 	switch op.Kind {
 	case migrate.OpAddTable:
@@ -25,6 +127,11 @@ func RenderMySQL(op *migrate.Operation) (string, error) {
 			return "", fmt.Errorf("rename op requires Before and After")
 		}
 		return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", op.Table, op.Before.Name, op.After.Name), nil
+	case migrate.OpRenameTable:
+		if op.NewTable == nil {
+			return "", fmt.Errorf("rename table op requires NewTable")
+		}
+		return fmt.Sprintf("RENAME TABLE %s TO %s;", op.Table, op.NewTable.Name), nil
 	case migrate.OpAddIndex:
 		return renderMySQLAddIndex(op.Table, op.IndexDef), nil
 	case migrate.OpDropIndex:

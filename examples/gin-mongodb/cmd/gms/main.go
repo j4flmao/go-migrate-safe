@@ -19,7 +19,9 @@ Commands:
   history     Show migration history
   validate    Validate migration files
   rollback    Rollback last migration
+  diff        Show what would change (no files written)
   seed        Seed initial data into database
+  doctor      Diagnose database connection and health
   studio      (Not yet supported for MongoDB)
 
 Environment:
@@ -39,7 +41,7 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "generate", "apply", "status", "history", "validate", "rollback":
+	case "generate", "apply", "status", "history", "validate", "rollback", "doctor", "diff":
 		internal.MigrateRun(os.Args[1], uri)
 	case "seed":
 		internal.SeedRun(uri)

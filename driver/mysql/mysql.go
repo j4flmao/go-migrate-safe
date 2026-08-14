@@ -107,6 +107,13 @@ func (d *Driver) DatabaseVersion(ctx context.Context) (string, error) {
 	return ver, err
 }
 
+func (d *Driver) CheckNulls(ctx context.Context, table, column string) (int64, error) {
+	var count int64
+	query := "SELECT COUNT(*) FROM `" + table + "` WHERE `" + column + "` IS NULL"
+	err := d.db.QueryRowContext(ctx, query).Scan(&count)
+	return count, err
+}
+
 func (d *Driver) Close() error {
 	return d.db.Close()
 }

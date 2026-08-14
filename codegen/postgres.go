@@ -8,6 +8,117 @@ import (
 	"github.com/j4flmao/go-migrate-safe/migrate"
 )
 
+// RenderPostgresBatch groups multiple operations into efficient batched statements.
+func RenderPostgresBatch(ops []migrate.Operation) []string {
+	if len(ops) == 0 {
+		return nil
+	}
+
+	var results []string
+	type alterGroup struct {
+		table string
+		parts []string
+	}
+	var currentAlter *alterGroup
+
+	flush := func() {
+		if currentAlter != nil && len(currentAlter.parts) > 0 {
+			results = append(results, fmt.Sprintf("ALTER TABLE %s\n    %s;", currentAlter.table, strings.Join(currentAlter.parts, ",\n    ")))
+			currentAlter = nil
+		}
+	}
+
+	for i := range ops {
+		op := &ops[i]
+		canBatch := false
+		var part string
+
+		switch op.Kind {
+		case migrate.OpAddColumn:
+			canBatch = true
+			part = "ADD COLUMN IF NOT EXISTS " + pgAddColumnPart(op.After)
+		case migrate.OpDropColumn:
+			canBatch = true
+			part = fmt.Sprintf("DROP COLUMN IF EXISTS %s", op.Column)
+		case migrate.OpAlterColumn:
+			// OpAlterColumn might produce multiple sub-commands (TYPE, NULL, DEFAULT)
+			canBatch = true
+			parts := pgAlterColumnParts(op)
+			if len(parts) > 0 {
+				part = strings.Join(parts, ",\n    ")
+			} else {
+				canBatch = false // nothing to do
+			}
+		case migrate.OpRenameColumn:
+			canBatch = true
+			part = fmt.Sprintf("RENAME COLUMN %s TO %s", op.Before.Name, op.After.Name)
+		case migrate.OpDropConstraint:
+			canBatch = true
+			name := ""
+			if op.ConstraintDef != nil {
+				name = op.ConstraintDef.Name
+			}
+			part = fmt.Sprintf("DROP CONSTRAINT IF EXISTS %s", name)
+		}
+
+		if canBatch {
+			if currentAlter != nil && currentAlter.table != op.Table {
+				flush()
+			}
+			if currentAlter == nil {
+				currentAlter = &alterGroup{table: op.Table}
+			}
+			currentAlter.parts = append(currentAlter.parts, part)
+		} else {
+			flush()
+			sql, _ := RenderPostgres(op)
+			if sql != "" {
+				results = append(results, sql)
+			}
+		}
+	}
+	flush()
+	return results
+}
+
+func pgAddColumnPart(c *migrate.ColumnModel) string {
+	parts := []string{c.Name, pgColumnType(c)}
+	if extras := pgColumnExtras(c, true); extras != "" {
+		parts = append(parts, extras)
+	}
+	return strings.Join(parts, " ")
+}
+
+func pgAlterColumnParts(op *migrate.Operation) []string {
+	a, b := op.Before, op.After
+	if a == nil || b == nil {
+		return nil
+	}
+	var parts []string
+	if a.SQLType != b.SQLType {
+		parts = append(parts, fmt.Sprintf("ALTER COLUMN %s SET DATA TYPE %s", op.Column, b.SQLType))
+	}
+	if a.Nullable != b.Nullable {
+		if b.Nullable {
+			parts = append(parts, fmt.Sprintf("ALTER COLUMN %s DROP NOT NULL", op.Column))
+		} else {
+			parts = append(parts, fmt.Sprintf("ALTER COLUMN %s SET NOT NULL", op.Column))
+		}
+	}
+	if !samePtr(a.Default, b.Default) {
+		if b.Default == nil {
+			parts = append(parts, fmt.Sprintf("ALTER COLUMN %s DROP DEFAULT", op.Column))
+		} else {
+			def := *b.Default
+			if isStringType(b.SQLType) && !looksSQLFunction(def) {
+				def = "'" + def + "'"
+			}
+			parts = append(parts, fmt.Sprintf("ALTER COLUMN %s SET DEFAULT %s", op.Column, def))
+		}
+	}
+	return parts
+}
+
 // RenderPostgres emits PostgreSQL DDL for a single operation.
 func RenderPostgres(op *migrate.Operation) (string, error) {
 	switch op.Kind {
@@ -26,6 +137,11 @@ func RenderPostgres(op *migrate.Operation) (string, error) {
 			return "", fmt.Errorf("rename op requires Before and After")
 		}
 		return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", op.Table, op.Before.Name, op.After.Name), nil
+	case migrate.OpRenameTable:
+		if op.NewTable == nil {
+			return "", fmt.Errorf("rename table op requires NewTable")
+		}
+		return fmt.Sprintf("ALTER TABLE %s RENAME TO %s;", op.Table, op.NewTable.Name), nil
 	case migrate.OpAddIndex:
 		return renderPGAddIndex(op.Table, op.IndexDef), nil
 	case migrate.OpDropIndex:

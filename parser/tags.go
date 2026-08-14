@@ -31,10 +31,14 @@ type Tag struct {
 	Scale         *int
 	TypeOverride  string // raw SQL type override
 	TableOverride string // when "table:user_profile"
+	TableOldName  string // when "table_old_name:user_profile_old"
 
 	// FK references: "fk:other_table(id)" or "fk:other_table"
 	FKRefTable  string
 	FKRefColumn string
+
+	OldName string // when "old_name:xyz"
+	Check   string // when "check:price > 0"
 }
 
 // ParseTag parses a `db:"..."` tag string. Empty tag returns Tag{}.
@@ -102,6 +106,12 @@ func (t *Tag) applyToken(tok string) error {
 		t.TypeOverride = tok[len("type:"):]
 	case strings.HasPrefix(low, "table:"):
 		t.TableOverride = tok[len("table:"):]
+	case strings.HasPrefix(low, "table_old_name:"):
+		t.TableOldName = tok[len("table_old_name:"):]
+	case strings.HasPrefix(low, "old_name:"):
+		t.OldName = tok[len("old_name:"):]
+	case strings.HasPrefix(low, "check:"):
+		t.Check = tok[len("check:"):]
 	case strings.HasPrefix(low, "index:"):
 		t.Index = true
 		t.IndexName = tok[len("index:"):]
@@ -156,7 +166,7 @@ func isReservedKeyword(tok string) bool {
 	}
 	for _, prefix := range []string{
 		"default:", "size:", "precision:", "scale:", "type:",
-		"table:", "index:", "unique:", "fk:",
+		"table:", "table_old_name:", "old_name:", "check:", "index:", "unique:", "fk:",
 	} {
 		if strings.HasPrefix(low, prefix) {
 			return true

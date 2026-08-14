@@ -33,6 +33,11 @@ func RenderSQLite(op *migrate.Operation) (string, error) {
 			return "", fmt.Errorf("rename op requires Before and After")
 		}
 		return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", op.Table, op.Before.Name, op.After.Name), nil
+	case migrate.OpRenameTable:
+		if op.NewTable == nil {
+			return "", fmt.Errorf("rename table op requires NewTable")
+		}
+		return fmt.Sprintf("ALTER TABLE %s RENAME TO %s;", op.Table, op.NewTable.Name), nil
 	case migrate.OpAddIndex:
 		return renderSQLiteAddIndex(op.Table, op.IndexDef), nil
 	case migrate.OpDropIndex:

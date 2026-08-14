@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 
 	"github.com/j4flmao/go-migrate-safe/migrate"
@@ -106,6 +107,13 @@ func (d *Driver) DatabaseVersion(ctx context.Context) (string, error) {
 	var ver string
 	err := d.db.QueryRowContext(ctx, "SELECT version()").Scan(&ver)
 	return ver, err
+}
+
+func (d *Driver) CheckNulls(ctx context.Context, table, column string) (int64, error) {
+	var count int64
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s IS NULL", table, column)
+	err := d.db.QueryRowContext(ctx, query).Scan(&count)
+	return count, err
 }
 
 func (d *Driver) Close() error {

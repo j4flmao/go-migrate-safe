@@ -113,6 +113,10 @@ func (d *Driver) RecordMigration(_ context.Context, r driver.MigrationRecord) er
 	return nil
 }
 
+func (d *Driver) CheckNulls(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (d *Driver) DriverName() string                                { return "memory" }
 func (d *Driver) DatabaseVersion(_ context.Context) (string, error) { return d.Version, nil }
 func (d *Driver) Close() error                                      { return nil }

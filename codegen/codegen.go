@@ -162,15 +162,37 @@ func (g *Generator) renderHeader(plan *migrate.DiffPlan, dir, checksum string) s
 func (g *Generator) renderBody(plan *migrate.DiffPlan) string {
 	c := g.commentPrefix()
 	var b strings.Builder
+
+	var statements []string
+	switch g.Dialect {
+	case "postgres":
+		statements = RenderPostgresBatch(plan.Operations)
+	case "mysql":
+		statements = RenderMySQLBatch(plan.Operations)
+	default:
+		for _, op := range plan.Operations {
+			if op.SQL != "" {
+				statements = append(statements, op.SQL)
+			}
+		}
+	}
+
+	// For comments and reasoning, we still want to show what each op was.
+	// However, if we batched them, the SQL statements don't map 1:1 to operations.
+	// So we'll list all operations as comments at the top of the body, then the statements.
+	fmt.Fprintf(&b, "%s Logic: Grouped by table for performance\n", c)
 	for i, op := range plan.Operations {
 		col := ""
 		if op.Column != "" {
 			col = "." + op.Column
 		}
-		fmt.Fprintf(&b, "%s [%d/%d] %s: %s%s\n", c, i+1, len(plan.Operations), op.Kind, op.Table, col)
-		fmt.Fprintf(&b, "%s Reason: %s\n", c, op.Reason)
-		b.WriteString(op.SQL)
-		if !strings.HasSuffix(op.SQL, "\n") {
+		fmt.Fprintf(&b, "%s [%d/%d] %s: %s%s (Reason: %s)\n", c, i+1, len(plan.Operations), op.Kind, op.Table, col, op.Reason)
+	}
+	b.WriteByte('\n')
+
+	for _, stmt := range statements {
+		b.WriteString(stmt)
+		if !strings.HasSuffix(stmt, "\n") {
 			b.WriteByte('\n')
 		}
 		b.WriteByte('\n')

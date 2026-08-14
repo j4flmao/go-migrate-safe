@@ -27,6 +27,8 @@ func MigrateRun(intent, dsn string) {
 		migrate.WithOutputDir("./migrations"),
 		migrate.WithSchema("dbo"),
 		migrate.WithDriver("mssql"),
+		migrate.WithAllowTypeChange(migrate.TypeChangeAny),
+		migrate.WithAllowDropTable(),
 	)
 	if err != nil {
 		log.Fatalf("migrate: %v", err)

@@ -20,6 +20,7 @@ const (
 	OpDropIndex       OpKind = "drop_index"
 	OpAddConstraint   OpKind = "add_constraint"
 	OpDropConstraint  OpKind = "drop_constraint"
+	OpRenameTable     OpKind = "rename_table"
 )
 
 // Operation is a single schema change.
