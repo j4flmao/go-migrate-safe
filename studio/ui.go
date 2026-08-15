@@ -1,6 +1,6 @@
 package studio
 
-import _ "embed"
+import "embed"
 
-//go:embed index.html
-var indexHTML []byte
+//go:embed ui/*
+var uiFS embed.FS
