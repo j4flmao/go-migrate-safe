@@ -50,9 +50,9 @@ func TestStudio_API(t *testing.T) {
 			path        string
 			contentType string
 		}{
-			{"/", "text/html; charset=utf-8"},
-			{"/ui/app.css", "text/css; charset=utf-8"},
-			{"/ui/app.js", "application/javascript"},
+			{"/", "text/html"},
+			{"/ui/app.css", "text/css"},
+			{"/ui/app.js", "javascript"},
 		}
 
 		for _, tc := range tests {
@@ -66,8 +66,7 @@ func TestStudio_API(t *testing.T) {
 				t.Errorf("expected 200 for %s, got %d", tc.path, resp.StatusCode)
 			}
 			ct := resp.Header.Get("Content-Type")
-			// Depending on OS/Go version, MIME types might slightly vary, but they should contain the base type
-			if !strings.Contains(ct, strings.Split(tc.contentType, ";")[0]) {
+			if !strings.Contains(ct, tc.contentType) {
 				t.Errorf("expected Content-Type %s for %s, got %s", tc.contentType, tc.path, ct)
 			}
 		}
