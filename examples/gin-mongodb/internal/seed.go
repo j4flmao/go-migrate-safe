@@ -66,19 +66,20 @@ func SeedRun(uri string) {
 		log.Fatalf("seed user: %v", err)
 	}
 
-	cats := []struct {
-		Name, Slug, Desc string
+	categories := []struct{
+		Name, Slug, Description string
 	}{
 		{"Electronics", "electronics", "Gadgets, devices, and tech accessories"},
 		{"Clothing", "clothing", "Apparel and fashion items"},
 		{"Books", "books", "Physical and digital books"},
 	}
+
 	catIDs := make(map[string]string)
-	for _, c := range cats {
-		cr, err := db.Collection("categories").InsertOne(ctx, Category{
+	for _, c := range categories {
+		cr, err := db.Collection("categories").InsertOne(ctx, ProductCategory{
 			Name:        c.Name,
 			Slug:        c.Slug,
-			Description: c.Desc,
+			Description: c.Description,
 			CreatedAt:   now,
 		})
 		if err != nil {
@@ -89,17 +90,17 @@ func SeedRun(uri string) {
 
 	products := []struct {
 		CategorySlug       string
-		Name, Slug, Desc  string
+		Name, Slug, Details string
 		Price              float64
 		Stock              int
 		ImageURL           string
 	}{
-		{"electronics", "Wireless Headphones", "wireless-headphones", "Noise-cancelling Bluetooth headphones", 149.99, 50, ""},
+		{"electronics", "Wireless Headphones", "wireless-headphones", "Noise cancelling wireless headphones", 149.99, 50, ""},
 		{"electronics", "USB-C Hub", "usb-c-hub", "7-in-1 USB-C hub with HDMI", 39.99, 120, ""},
 		{"electronics", "Mechanical Keyboard", "mechanical-keyboard", "RGB mechanical keyboard, blue switches", 89.99, 30, ""},
-		{"clothing", "Cotton T-Shirt", "cotton-tshirt", "Soft 100% cotton t-shirt", 24.99, 200, ""},
+		{"clothing", "Cotton T-Shirt", "cotton-tshirt", "Comfortable cotton t-shirt", 24.99, 200, ""},
 		{"clothing", "Denim Jacket", "denim-jacket", "Classic blue denim jacket", 79.99, 15, ""},
-		{"books", "Go Programming", "go-programming", "Comprehensive guide to Go", 44.99, 100, ""},
+		{"books", "Go Programming", "go-programming", "A comprehensive guide to Go", 44.99, 100, ""},
 		{"books", "Clean Code", "clean-code", "Best practices for writing maintainable code", 34.99, 75, ""},
 	}
 
@@ -117,7 +118,7 @@ func SeedRun(uri string) {
 			CategoryName: catName,
 			Name:         p.Name,
 			Slug:         p.Slug,
-			Description:  p.Desc,
+			Details:      p.Details,
 			Price:        p.Price,
 			Stock:        p.Stock,
 			ImageURL:     p.ImageURL,

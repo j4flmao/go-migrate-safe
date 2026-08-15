@@ -41,7 +41,18 @@ func New(ctx context.Context, uri, database string) (*Driver, error) {
 }
 
 func (d *Driver) ReadSchema(ctx context.Context, schema string) (*migrate.SchemaModel, error) {
-	return migrate.NewSchemaModel("nosql"), nil
+	sm := migrate.NewSchemaModel("nosql")
+	cols, err := d.db.ListCollectionNames(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	for _, col := range cols {
+		sm.Tables[col] = &migrate.TableModel{
+			Name:    col,
+			Columns: map[string]*migrate.ColumnModel{},
+		}
+	}
+	return sm, nil
 }
 
 func (d *Driver) Exec(ctx context.Context, cmd string) error {

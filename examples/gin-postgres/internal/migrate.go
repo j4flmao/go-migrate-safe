@@ -35,6 +35,8 @@ func MigrateRun(intent, dsn string) {
         migrate.WithModels(Models()...),
         migrate.WithOutputDir("./migrations"),
         migrate.WithDriver("postgres"),
+        migrate.WithAllowDropTable(),
+        migrate.WithAllowTypeChange(migrate.TypeChangeAny),
     )
     if err != nil {
         log.Fatalf("migrate: %v", err)

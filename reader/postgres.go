@@ -50,7 +50,7 @@ func (r *PostgresReader) ReadSchema(ctx context.Context, schema string) (*migrat
 					JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
 					WHERE kcu.table_schema = c.table_schema AND kcu.table_name = c.table_name AND kcu.column_name = c.column_name AND tc.constraint_type = 'PRIMARY KEY'
 				) as is_pk,
-				(c.column_default LIKE 'nextval%') as is_auto
+				COALESCE(c.column_default LIKE 'nextval%', false) as is_auto
 			 FROM information_schema.columns c
 			 WHERE c.table_schema = $1 AND c.table_name = $2
 			 ORDER BY c.ordinal_position`, schema, tn)

@@ -17,6 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"github.com/j4flmao/go-migrate-safe/migrate"
 )
 
@@ -24,7 +28,8 @@ import (
 // embedded HTML page that mimics Prisma Studio.
 type Server struct {
 	db          *sql.DB
-	driverName  string // "postgres" | "mysql" | "sqlite" | "mssql"
+	mongoDB     *mongo.Database
+	driverName  string // "postgres" | "mysql" | "sqlite" | "mssql" | "mongodb"
 	schema      string
 	driver      migrate.Driver
 	openBrowser bool
@@ -33,6 +38,7 @@ type Server struct {
 // Options configures a Studio server.
 type Options struct {
 	DB          *sql.DB
+	MongoDB     *mongo.Database
 	DriverName  string
 	Schema      string
 	Driver      migrate.Driver
@@ -43,11 +49,11 @@ type Options struct {
 // underlying *sql.DB for the connected provider. Mongo / memory drivers are
 // not supported.
 func New(opts Options) (*Server, error) {
-	if opts.DB == nil {
-		return nil, fmt.Errorf("studio: nil *sql.DB (driver %q is not supported)", opts.DriverName)
+	if opts.DB == nil && opts.MongoDB == nil {
+		return nil, fmt.Errorf("studio: nil *sql.DB and nil *mongo.Database (driver %q is not supported)", opts.DriverName)
 	}
 	switch opts.DriverName {
-	case "postgres", "mysql", "sqlite", "mssql":
+	case "postgres", "mysql", "sqlite", "mssql", "mongodb":
 	default:
 		return nil, fmt.Errorf("studio: unsupported driver %q", opts.DriverName)
 	}
@@ -56,6 +62,7 @@ func New(opts Options) (*Server, error) {
 	}
 	return &Server{
 		db:          opts.DB,
+		mongoDB:     opts.MongoDB,
 		driverName:  opts.DriverName,
 		schema:      opts.Schema,
 		driver:      opts.Driver,
@@ -168,6 +175,7 @@ type columnDef struct {
 	Nullable      bool     `json:"nullable"`
 	IsPK          bool     `json:"isPK"`
 	AutoIncrement bool     `json:"autoIncrement"`
+	HasDefault    bool     `json:"hasDefault"`
 	EnumValues    []string `json:"enumValues,omitempty"`
 }
 
@@ -252,20 +260,28 @@ func (s *Server) handleTableData(w http.ResponseWriter, r *http.Request, name st
 		}
 		sort.Strings(colOrder)
 	}
-	for _, cn := range colOrder {
-		c := tbl.Columns[cn]
-		if c == nil {
-			continue
+	if s.driverName == "mongodb" {
+		cols = []columnDef{{Name: "_document", Type: "json", Nullable: false, IsPK: false, AutoIncrement: false}}
+	} else {
+		for _, cn := range colOrder {
+			c := tbl.Columns[cn]
+			if c == nil {
+				continue
+			}
+			var enumValues []string
+			if c.SQLType == "enum" {
+				enumValues = s.enumValuesForCol(ctx, c)
+			}
+			cols = append(cols, columnDef{
+				Name:          c.Name,
+				Type:          c.SQLType,
+				Nullable:      c.Nullable,
+				IsPK:          c.IsPK,
+				AutoIncrement: c.AutoIncrement,
+				HasDefault:    c.Default != nil,
+				EnumValues:    enumValues,
+			})
 		}
-		enumVals := s.enumValuesForCol(ctx, c)
-		cols = append(cols, columnDef{
-			Name:          c.Name,
-			Type:          c.SQLType,
-			Nullable:      c.Nullable,
-			IsPK:          c.IsPK,
-			AutoIncrement: c.AutoIncrement,
-			EnumValues:    enumVals,
-		})
 	}
 
 	idx := make([]indexSummary, 0, len(tbl.Indexes))
@@ -319,6 +335,19 @@ func (s *Server) handleInsert(w http.ResponseWriter, r *http.Request, name strin
 	tbl, ok := sm.Tables[name]
 	if !ok {
 		writeError(w, http.StatusNotFound, "table not found")
+		return
+	}
+
+	if s.driverName == "mongodb" {
+		doc := bson.M{}
+		for k, v := range body.Values {
+			doc[k] = v
+		}
+		if _, err := s.mongoDB.Collection(name).InsertOne(ctx, doc); err != nil {
+			writeError(w, http.StatusConflict, friendlySQLError(err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
 		return
 	}
 
@@ -390,6 +419,28 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request, name strin
 		return
 	}
 
+	if s.driverName == "mongodb" {
+		filter := bson.M{}
+		for k, v := range body.PK {
+			if k == "_id" {
+				if oid, err := primitive.ObjectIDFromHex(fmt.Sprint(v)); err == nil {
+					filter[k] = oid
+				} else {
+					filter[k] = v
+				}
+			} else {
+				filter[k] = v
+			}
+		}
+		update := bson.M{"$set": body.Values}
+		if _, err := s.mongoDB.Collection(name).UpdateOne(ctx, filter, update); err != nil {
+			writeError(w, http.StatusConflict, friendlySQLError(err))
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		return
+	}
+
 	setCols := make([]string, 0)
 	vals := make([]any, 0)
 	i := 1
@@ -440,6 +491,32 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, name strin
 
 	if len(body.PKs) == 0 {
 		writeError(w, http.StatusBadRequest, "no PKs provided")
+		return
+	}
+
+	if s.driverName == "mongodb" {
+		deleted := 0
+		for _, pk := range body.PKs {
+			filter := bson.M{}
+			for k, v := range pk {
+				if k == "_id" {
+					if oid, err := primitive.ObjectIDFromHex(fmt.Sprint(v)); err == nil {
+						filter[k] = oid
+					} else {
+						filter[k] = v
+					}
+				} else {
+					filter[k] = v
+				}
+			}
+			if res, err := s.mongoDB.Collection(name).DeleteOne(ctx, filter); err == nil {
+				deleted += int(res.DeletedCount)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"deleted": deleted,
+		})
 		return
 	}
 
@@ -586,6 +663,9 @@ func (s *Server) qualifiedTable(name string) string {
 }
 
 func (s *Server) countRows(ctx context.Context, table string) (int64, error) {
+	if s.driverName == "mongodb" {
+		return s.mongoDB.Collection(table).CountDocuments(ctx, bson.M{})
+	}
 	q := "SELECT COUNT(*) FROM " + s.qualifiedTable(table)
 	var n int64
 	err := s.db.QueryRowContext(ctx, q).Scan(&n)
@@ -593,6 +673,25 @@ func (s *Server) countRows(ctx context.Context, table string) (int64, error) {
 }
 
 func (s *Server) fetchRows(ctx context.Context, table string, colOrder []string, limit, offset int) ([][]any, error) {
+	if s.driverName == "mongodb" {
+		opts := options.Find().SetLimit(int64(limit)).SetSkip(int64(offset))
+		cur, err := s.mongoDB.Collection(table).Find(ctx, bson.M{}, opts)
+		if err != nil {
+			return nil, err
+		}
+		defer cur.Close(ctx)
+		out := make([][]any, 0)
+		for cur.Next(ctx) {
+			var doc bson.M
+			if err := cur.Decode(&doc); err != nil {
+				return nil, err
+			}
+			// For MongoDB, we just return the full document as a single element array
+			out = append(out, []any{normalizeMongo(doc)})
+		}
+		return out, cur.Err()
+	}
+
 	if len(colOrder) == 0 {
 		return nil, fmt.Errorf("no columns")
 	}
@@ -638,6 +737,29 @@ func (s *Server) fetchRows(ctx context.Context, table string, colOrder []string,
 		out = append(out, row)
 	}
 	return out, rs.Err()
+}
+
+func normalizeMongo(v any) any {
+	switch t := v.(type) {
+	case primitive.ObjectID:
+		return t.Hex()
+	case primitive.DateTime:
+		return t.Time().Format(time.RFC3339)
+	case primitive.A:
+		var s []any
+		for _, e := range t {
+			s = append(s, normalizeMongo(e))
+		}
+		return s
+	case primitive.M:
+		m := make(map[string]any)
+		for k, v := range t {
+			m[k] = normalizeMongo(v)
+		}
+		return m
+	default:
+		return v
+	}
 }
 
 func normalize(v any) any {
