@@ -21,9 +21,10 @@ func TestStudio_API(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Setup table
+	// Setup tables
 	_, _ = db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 	_, _ = db.Exec("INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob')")
+	_, _ = db.Exec("CREATE TABLE logs (id INTEGER PRIMARY KEY, msg TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
 	drv := sqlite.New(db)
 	srv, err := studio.New(studio.Options{
@@ -43,6 +44,34 @@ func TestStudio_API(t *testing.T) {
 	// Wait for server to start
 	time.Sleep(200 * time.Millisecond)
 	baseURL := "http://" + addr
+
+	t.Run("UIAssets", func(t *testing.T) {
+		tests := []struct {
+			path        string
+			contentType string
+		}{
+			{"/", "text/html; charset=utf-8"},
+			{"/ui/app.css", "text/css; charset=utf-8"},
+			{"/ui/app.js", "application/javascript"},
+		}
+
+		for _, tc := range tests {
+			resp, err := http.Get(baseURL + tc.path)
+			if err != nil {
+				t.Fatalf("GET %s: %v", tc.path, err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("expected 200 for %s, got %d", tc.path, resp.StatusCode)
+			}
+			ct := resp.Header.Get("Content-Type")
+			// Depending on OS/Go version, MIME types might slightly vary, but they should contain the base type
+			if !strings.Contains(ct, strings.Split(tc.contentType, ";")[0]) {
+				t.Errorf("expected Content-Type %s for %s, got %s", tc.contentType, tc.path, ct)
+			}
+		}
+	})
 
 	t.Run("Info", func(t *testing.T) {
 		resp, err := http.Get(baseURL + "/api/info")
@@ -107,6 +136,34 @@ func TestStudio_API(t *testing.T) {
 		rows := data["rows"].([]any)
 		if len(rows) != 2 {
 			t.Errorf("expected 2 rows, got %d", len(rows))
+		}
+	})
+
+	t.Run("HasDefaultLogic", func(t *testing.T) {
+		resp, err := http.Get(baseURL + "/api/table/logs")
+		if err != nil {
+			t.Fatalf("GET: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected 200, got %d", resp.StatusCode)
+		}
+		var data map[string]any
+		json.NewDecoder(resp.Body).Decode(&data)
+
+		cols := data["columns"].([]any)
+		var hasDefaultFound bool
+		for _, cAny := range cols {
+			c := cAny.(map[string]any)
+			if c["name"] == "created_at" {
+				if val, ok := c["hasDefault"].(bool); ok && val {
+					hasDefaultFound = true
+				}
+			}
+		}
+		if !hasDefaultFound {
+			t.Error("expected created_at to have hasDefault: true, but it didn't")
 		}
 	})
 
