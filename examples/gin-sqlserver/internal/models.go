@@ -12,21 +12,22 @@ type User struct {
 	UpdatedAt    time.Time `db:"updated_at,not null,default:CURRENT_TIMESTAMP"`
 }
 
-type Category struct {
+type ProductCategory struct {
+	_           struct{}  `db:"table:product_categories,table_old_name:categories"`
 	ID          int64     `db:"id,pk,autoincrement"`
 	Name        string    `db:"name,not null"`
-	Slug        string    `db:"slug,unique,not null"`
+	Slug        string    `db:"slug,unique,not null,size:255"`
 	Description string    `db:"description"`
-	CreatedAt   time.Time `db:"created_at,not null,default:CURRENT_TIMESTAMP"`
+	CreatedAt   time.Time `db:"created_at,default:GETDATE()"`
 }
 
 type Product struct {
 	ID          int64     `db:"id,pk,autoincrement"`
-	CategoryID  int64     `db:"category_id,not null,index,fk:categories(id)"`
+	CategoryID  int64     `db:"category_id,not null,index,fk:product_categories(id)"`
 	Name        string    `db:"name,not null"`
-	Slug        string    `db:"slug,unique,not null"`
-	Description string    `db:"description"`
-	Price       float64   `db:"price,not null,default:0.00"`
+	Slug        string    `db:"slug,unique,not null,size:255"`
+	Details     string    `db:"details,old_name:description"`
+	Price       float64   `db:"price,not null,default:0.00,check:price >= 0"`
 	Stock       int       `db:"stock,not null,default:0"`
 	ImageURL    string    `db:"image_url"`
 	CreatedAt   time.Time `db:"created_at,not null,default:CURRENT_TIMESTAMP"`
@@ -52,5 +53,5 @@ type OrderItem struct {
 }
 
 func Models() []any {
-	return []any{User{}, Category{}, Product{}, Order{}, OrderItem{}}
+	return []any{User{}, ProductCategory{}, Product{}, Order{}, OrderItem{}}
 }

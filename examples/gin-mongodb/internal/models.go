@@ -16,7 +16,8 @@ type User struct {
 	UpdatedAt    time.Time          `db:"updated_at,not null" bson:"updated_at" json:"updated_at"`
 }
 
-type Category struct {
+type ProductCategory struct {
+	_           struct{}           `db:"table:product_categories,table_old_name:categories"`
 	ID          primitive.ObjectID `db:"id,pk" bson:"_id,omitempty" json:"id"`
 	Name        string             `db:"name,not null" bson:"name" json:"name"`
 	Slug        string             `db:"slug,unique,not null" bson:"slug" json:"slug"`
@@ -30,8 +31,8 @@ type Product struct {
 	CategoryName string             `db:"category_name" bson:"category_name,omitempty" json:"category_name,omitempty"`
 	Name         string             `db:"name,not null" bson:"name" json:"name"`
 	Slug         string             `db:"slug,unique,not null" bson:"slug" json:"slug"`
-	Description  string             `db:"description" bson:"description" json:"description"`
-	Price        float64            `db:"price,not null" bson:"price" json:"price"`
+	Details      string             `db:"details,old_name:description" bson:"details" json:"details"`
+	Price        float64            `db:"price,not null,check:price >= 0" bson:"price" json:"price"`
 	Stock        int                `db:"stock,not null" bson:"stock" json:"stock"`
 	ImageURL     string             `db:"image_url" bson:"image_url" json:"image_url"`
 	CreatedAt    time.Time          `db:"created_at,not null" bson:"created_at" json:"created_at"`
@@ -56,5 +57,5 @@ type OrderItem struct {
 }
 
 func Models() []any {
-	return []any{User{}, Category{}, Product{}, Order{}}
+	return []any{User{}, ProductCategory{}, Product{}, Order{}}
 }

@@ -97,6 +97,8 @@ func (p *Planner) invert(op migrate.Operation) (migrate.Operation, *ManualItem, 
 		return p.invertAlterColumn(op)
 	case migrate.OpRenameColumn:
 		return p.invertRenameColumn(op)
+	case migrate.OpRenameTable:
+		return p.invertRenameTable(op)
 	case migrate.OpAddIndex:
 		return p.invertAddIndex(op)
 	case migrate.OpDropIndex:
@@ -245,6 +247,38 @@ func (p *Planner) invertRenameColumn(op migrate.Operation) (migrate.Operation, *
 		SQL:    fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", op.Table, op.After.Name, op.Before.Name),
 		Reason: fmt.Sprintf("Inverse of rename_column %s.%s -> %s", op.Table, op.Before.Name, op.After.Name),
 	}
+	return rev, nil, nil
+}
+
+func (p *Planner) invertRenameTable(op migrate.Operation) (migrate.Operation, *ManualItem, error) {
+	if op.NewTable == nil {
+		return migrate.Operation{}, nil, fmt.Errorf("rename table inverse needs NewTable")
+	}
+	
+	rev := migrate.Operation{
+		Kind: migrate.OpRenameTable,
+		Table: op.NewTable.Name,
+		NewTable: &migrate.TableModel{Name: op.Table},
+		Reason: fmt.Sprintf("Inverse of rename_table %s -> %s", op.Table, op.NewTable.Name),
+	}
+	
+	sql, err := codegen.RenderPostgres(&rev)
+	if p.Dialect == "mysql" {
+		sql, err = codegen.RenderMySQL(&rev)
+	}
+	if p.Dialect == "mssql" {
+		sql, err = codegen.RenderMSSQL(&rev)
+	}
+	if p.Dialect == "sqlite" {
+		sql, err = codegen.RenderSQLite(&rev)
+	}
+	if p.Dialect == "mongodb" {
+		sql, err = codegen.RenderMongoDB(&rev)
+	}
+	if err != nil {
+		return rev, nil, err
+	}
+	rev.SQL = sql
 	return rev, nil, nil
 }
 

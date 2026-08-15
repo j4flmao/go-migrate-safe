@@ -41,7 +41,18 @@ func New(ctx context.Context, uri, database string) (*Driver, error) {
 }
 
 func (d *Driver) ReadSchema(ctx context.Context, schema string) (*migrate.SchemaModel, error) {
-	return migrate.NewSchemaModel("nosql"), nil
+	sm := migrate.NewSchemaModel("nosql")
+	cols, err := d.db.ListCollectionNames(ctx, bson.D{})
+	if err != nil {
+		return nil, err
+	}
+	for _, col := range cols {
+		sm.Tables[col] = &migrate.TableModel{
+			Name:    col,
+			Columns: map[string]*migrate.ColumnModel{},
+		}
+	}
+	return sm, nil
 }
 
 func (d *Driver) Exec(ctx context.Context, cmd string) error {
@@ -198,8 +209,16 @@ func (d *Driver) DatabaseVersion(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ver, _ := buildInfo["version"].(string)
-	return ver, nil
+	if v, ok := buildInfo["version"].(string); ok {
+		return v, nil
+	}
+	return "unknown", nil
+}
+
+func (d *Driver) CheckNulls(ctx context.Context, table, column string) (int64, error) {
+	col := d.db.Collection(table)
+	count, err := col.CountDocuments(ctx, bson.M{column: nil})
+	return count, err
 }
 
 func (d *Driver) Close() error {

@@ -59,13 +59,54 @@ func (r *MySQLReader) ReadSchema(ctx context.Context, schema string) (*migrate.S
 		indexes, err := readIndexes(ctx, r.db,
 			`SELECT index_name, column_name, non_unique=0
 			 FROM information_schema.statistics
-			 WHERE table_schema = ? AND table_name = ?`, schema, tn)
+			 WHERE table_schema = ? AND table_name = ? AND index_name != 'PRIMARY'`, schema, tn)
 		if err != nil {
 			return nil, fmt.Errorf("mysql reader: read indexes for %s: %w", tn, err)
 		}
 		tbl.Indexes = indexes
 
+		// Read Foreign Keys
+		fks, err := readMySQLFKs(ctx, r.db, schema, tn)
+		if err == nil {
+			for name, fk := range fks {
+				tbl.Constraints[name] = fk
+			}
+		}
+
 		sm.Tables[tn] = tbl
 	}
 	return sm, nil
+}
+
+func readMySQLFKs(ctx context.Context, db *sql.DB, schema, table string) (map[string]*migrate.ConstraintModel, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT 
+			constraint_name, 
+			column_name, 
+			referenced_table_name, 
+			referenced_column_name
+		 FROM information_schema.key_column_usage
+		 WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL`, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fks := map[string]*migrate.ConstraintModel{}
+	for rows.Next() {
+		var name, col, refTable, refCol string
+		if err := rows.Scan(&name, &col, &refTable, &refCol); err != nil {
+			return nil, err
+		}
+		if _, ok := fks[name]; !ok {
+			fks[name] = &migrate.ConstraintModel{
+				Name:     name,
+				Kind:     migrate.ConstraintForeignKey,
+				RefTable: refTable,
+			}
+		}
+		fks[name].Columns = append(fks[name].Columns, col)
+		fks[name].RefColumns = append(fks[name].RefColumns, refCol)
+	}
+	return fks, nil
 }

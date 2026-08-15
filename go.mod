@@ -1,17 +1,19 @@
 module github.com/j4flmao/go-migrate-safe
 
-go 1.21
+go 1.25
 
 require (
 	github.com/denisenkom/go-mssqldb v0.12.3
-	github.com/go-sql-driver/mysql v1.8.1
-	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/go-sql-driver/mysql v1.10.0
+	github.com/lib/pq v1.12.3
+	github.com/mattn/go-sqlite3 v1.14.44
 	go.mongodb.org/mongo-driver v1.17.9
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/alecthomas/chroma/v2 v2.26.1 // indirect
+	github.com/dlclark/regexp2/v2 v2.1.1 // indirect
 	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect

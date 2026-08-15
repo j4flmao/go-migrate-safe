@@ -40,9 +40,9 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 	wantTables := sortedKeys(want.Tables)
 	dbTables := sortedKeys(db.Tables)
 
-	// Apply explicit renames as a pre-pass: copy DB columns under the new name
-	// in the working DB snapshot so they no longer appear as drop+add.
+	// Apply explicit renames from Engine specs as a pre-pass.
 	var renameOps []migrate.Operation
+	var renameTableOps []migrate.Operation
 	for _, r := range e.RenameSpecs {
 		t, ok := db.Tables[r.Table]
 		if !ok {
@@ -76,6 +76,65 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 			After:  &nc,
 		})
 	}
+
+	// Apply struct tag table renames
+	for _, name := range wantTables {
+		wt := want.Tables[name]
+		if wt.OldName != "" {
+			if dt, exists := db.Tables[wt.OldName]; exists {
+				if _, conflict := db.Tables[name]; !conflict {
+					renameTableOps = append(renameTableOps, migrate.Operation{
+						Kind:     migrate.OpRenameTable,
+						Table:    wt.OldName,
+						NewTable: wt,
+						Reason:   fmt.Sprintf("Rename table %q → %q (explicit struct tag)", wt.OldName, name),
+					})
+					dt.Name = name
+					db.Tables[name] = dt
+					delete(db.Tables, wt.OldName)
+				}
+			}
+		}
+	}
+
+	// Apply struct tag column renames
+	for _, name := range wantTables {
+		wt := want.Tables[name]
+		dt, ok := db.Tables[name]
+		if !ok {
+			continue
+		}
+		for _, cname := range orderedColumnNames(wt) {
+			wc := wt.Columns[cname]
+			if wc.OldName != "" {
+				if dc, exists := dt.Columns[wc.OldName]; exists {
+					if _, conflict := dt.Columns[cname]; !conflict {
+						nc := *dc
+						nc.Name = cname
+						dt.Columns[cname] = &nc
+						delete(dt.Columns, wc.OldName)
+						for i, oldCol := range dt.ColumnOrder {
+							if oldCol == wc.OldName {
+								dt.ColumnOrder[i] = cname
+								break
+							}
+						}
+						renameOps = append(renameOps, migrate.Operation{
+							Kind:   migrate.OpRenameColumn,
+							Table:  name,
+							Column: cname,
+							Reason: fmt.Sprintf("Rename column %q.%q → %q (explicit struct tag)", name, wc.OldName, cname),
+							Before: dc,
+							After:  &nc,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Re-evaluate dbTables after table renames
+	dbTables = sortedKeys(db.Tables)
 
 	// Buckets so we can emit them in the safe order required by §3.2.
 	var (
@@ -173,7 +232,7 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 					Reason: fmt.Sprintf("Added column %q.%q %s — new field in struct", name, cname, wc.SQLType),
 				}
 				if !wc.Nullable && wc.Default == nil {
-					op.IsUnsafe = false // not destructive but data-risk; flagged by validator
+					op.IsUnsafe = true // destructive if table has data
 					addColUnsafe = append(addColUnsafe, op)
 				} else {
 					addColSafe = append(addColSafe, op)
@@ -193,7 +252,8 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 					op.IsUnsafe = true
 				}
 				if dc.Nullable && !wc.Nullable {
-					// nullable → not null may fail if NULLs exist; not data loss but risky
+					// nullable → not null may fail if NULLs exist
+					op.IsUnsafe = true
 				}
 				alterCol = append(alterCol, op)
 			}
@@ -270,6 +330,7 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 				case migrate.ConstraintForeignKey:
 					dropFK = append(dropFK, op)
 				case migrate.ConstraintUnique:
+					op.IsUnsafe = true // dropping unique constraint allows duplicates, making rollback unsafe
 					dropUniq = append(dropUniq, op)
 				default:
 					dropConstraint = append(dropConstraint, op)
@@ -293,7 +354,8 @@ func (e *Engine) Compute(want, db *migrate.SchemaModel, nextVersion int64) *migr
 	plan.Operations = append(plan.Operations, addFK...)
 	plan.Operations = append(plan.Operations, addConstraint...)
 	plan.Operations = append(plan.Operations, alterCol...)
-	plan.Operations = append(plan.Operations, renameOps...)
+	plan.Operations = append(renameTableOps, plan.Operations...)
+	plan.Operations = append(renameOps, plan.Operations...)
 
 	// Destructive flag.
 	for _, op := range plan.Operations {
@@ -444,6 +506,8 @@ func opName(op migrate.Operation) string {
 		return "alter_" + op.Table + "_" + op.Column
 	case migrate.OpRenameColumn:
 		return "rename_" + op.Table + "_" + op.Column
+	case migrate.OpRenameTable:
+		return "rename_" + op.Table + "_to_" + op.NewTable.Name
 	case migrate.OpAddIndex:
 		return "add_" + op.Index
 	case migrate.OpDropIndex:

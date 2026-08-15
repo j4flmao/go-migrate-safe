@@ -32,6 +32,7 @@ type TableModel struct {
 	// ColumnOrder preserves the declaration order of columns (parser only).
 	// The DB reader fills it from ordinal_position.
 	ColumnOrder []string
+	OldName     string // Set if table_old_name:"..." tag was used.
 }
 
 // NewTableModel constructs an empty TableModel.
@@ -55,6 +56,7 @@ type ColumnModel struct {
 	Size          *int // for VARCHAR(n)
 	Precision     *int // for DECIMAL(p,s)
 	Scale         *int
+	OldName       string // Set if old_name:"..." tag was used.
 }
 
 // IndexModel describes a single index.
@@ -156,6 +158,10 @@ type Driver interface {
 	// Introspection
 	DriverName() string
 	DatabaseVersion(ctx context.Context) (string, error)
+
+	// Integrity
+	// CheckNulls returns the count of NULL values in the given table/column.
+	CheckNulls(ctx context.Context, table, column string) (int64, error)
 
 	// Close releases all resources.
 	Close() error

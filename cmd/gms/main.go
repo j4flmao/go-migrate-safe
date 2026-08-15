@@ -41,6 +41,7 @@ Commands:
   validate    Validate all migration files
   rollback    Rollback last N migrations
   diff        Show what would change (no files written)
+  doctor      Diagnose database connection, permissions, and migration health
   studio      Launch the GMS Studio web UI to browse the database
 
 Flags:
@@ -87,6 +88,19 @@ func main() {
 	}
 	if cmd == "studio" {
 		runStudio(os.Args[2:])
+		return
+	}
+	if cmd == "doctor" {
+		fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+		driverName := fs.String("driver", "", "")
+		dir := fs.String("dir", "./migrations", "")
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			exitErr(err, 1)
+		}
+		if *driverName == "" {
+			*driverName = detectDriver()
+		}
+		runDoctor(*driverName, *dir)
 		return
 	}
 
@@ -171,7 +185,28 @@ func main() {
 		exitErr(err, classifyExit(res, err))
 	}
 	if res.Explain != "" {
-		fmt.Print(res.Explain)
+		if cmd == "diff" || cmd == "status" || cmd == "generate" {
+			// Print line by line to detect SQL vs non-SQL parts (simple heuristic)
+			lines := strings.Split(res.Explain, "\n")
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					fmt.Println()
+					continue
+				}
+				// Simple heuristic: if it looks like DDL, highlight it
+				if strings.HasPrefix(strings.ToUpper(trimmed), "CREATE") ||
+					strings.HasPrefix(strings.ToUpper(trimmed), "ALTER") ||
+					strings.HasPrefix(strings.ToUpper(trimmed), "DROP") ||
+					strings.HasPrefix(strings.ToUpper(trimmed), "INSERT") {
+					highlightSQL(os.Stdout, line+"\n")
+				} else {
+					fmt.Println(line)
+				}
+			}
+		} else {
+			fmt.Print(res.Explain)
+		}
 	}
 	if len(res.Warnings) > 0 {
 		fmt.Fprintln(os.Stderr, "Warnings:")

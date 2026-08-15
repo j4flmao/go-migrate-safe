@@ -72,9 +72,55 @@ func (r *MSSQLReader) ReadSchema(ctx context.Context, schema string) (*migrate.S
 		}
 		tbl.Indexes = indexes
 
+		// Read Foreign Keys
+		fks, err := readMSSQLFKs(ctx, r.db, tn)
+		if err == nil {
+			for name, fk := range fks {
+				tbl.Constraints[name] = fk
+			}
+		}
+
 		sm.Tables[tn] = tbl
 	}
 	return sm, nil
+}
+
+func readMSSQLFKs(ctx context.Context, db *sql.DB, table string) (map[string]*migrate.ConstraintModel, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT 
+			obj.name AS constraint_name,
+			col1.name AS column_name,
+			tab2.name AS referenced_table_name,
+			col2.name AS referenced_column_name
+		FROM sys.foreign_key_columns fkc
+		INNER JOIN sys.objects obj ON obj.object_id = fkc.constraint_object_id
+		INNER JOIN sys.tables tab1 ON tab1.object_id = fkc.parent_object_id
+		INNER JOIN sys.columns col1 ON col1.column_id = fkc.parent_column_id AND col1.object_id = tab1.object_id
+		INNER JOIN sys.tables tab2 ON tab2.object_id = fkc.referenced_object_id
+		INNER JOIN sys.columns col2 ON col2.column_id = fkc.referenced_column_id AND col2.object_id = tab2.object_id
+		WHERE tab1.name = @p1`, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fks := map[string]*migrate.ConstraintModel{}
+	for rows.Next() {
+		var name, col, refTable, refCol string
+		if err := rows.Scan(&name, &col, &refTable, &refCol); err != nil {
+			return nil, err
+		}
+		if _, ok := fks[name]; !ok {
+			fks[name] = &migrate.ConstraintModel{
+				Name:     name,
+				Kind:     migrate.ConstraintForeignKey,
+				RefTable: refTable,
+			}
+		}
+		fks[name].Columns = append(fks[name].Columns, col)
+		fks[name].RefColumns = append(fks[name].RefColumns, refCol)
+	}
+	return fks, nil
 }
 
 func readMSSQLIndexes(ctx context.Context, db *sql.DB, table string) (map[string]*migrate.IndexModel, error) {

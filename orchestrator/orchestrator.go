@@ -21,10 +21,10 @@ import (
 
 // Step is a record of one agent invocation in a pipeline run.
 type Step struct {
-	Agent       string
-	Status      string
-	DurationMS  int64
-	Summary     string
+	Agent      string
+	Status     string
+	DurationMS int64
+	Summary    string
 }
 
 // Result is the outcome of a pipeline run.
@@ -70,6 +70,8 @@ func Run(ctx context.Context, intent string, opts Options) (*Result, error) {
 		return runStatus(ctx, opts)
 	case "history":
 		return runHistory(ctx, opts)
+	case "doctor":
+		return runDoctor(ctx, opts)
 	}
 	return nil, fmt.Errorf("orchestrator: unknown intent %q", intent)
 }
@@ -132,7 +134,26 @@ func runGenerate(ctx context.Context, opts Options) (*Result, error) {
 	res.Steps = append(res.Steps, step)
 	res.GeneratedFiles = []string{out.UpFile, out.DownFile}
 
-	// Step 4: rollback
+	// Step 4: shadow validation (optional but recommended)
+	if sd, ok := opts.DBDriver.(migrate.ShadowDriver); ok {
+		step = Step{Agent: "shadow_validator"}
+		t0 = time.Now()
+		if err := validateInShadow(ctx, sd, opts.OutputDir, out); err != nil {
+			res.Errors = append(res.Errors, validator.Issue{
+				Code: "ErrShadowValidationFailed", Message: err.Error(), Blocking: true, Agent: "shadow_validator",
+			})
+			res.Pipeline = "error"
+			// Clean up generated files on shadow failure?
+			// For now, let's keep them so the user can see what failed.
+			return res, nil
+		}
+		step.Status = "ok"
+		step.DurationMS = time.Since(t0).Milliseconds()
+		step.Summary = "SQL verified against shadow database"
+		res.Steps = append(res.Steps, step)
+	}
+
+	// Step 5: rollback
 	step = Step{Agent: "rollback"}
 	t0 = time.Now()
 	rp, err := rollback.New(dialect).Build(plan, out.DownFile)
@@ -151,6 +172,25 @@ func runGenerate(ctx context.Context, opts Options) (*Result, error) {
 	res.Explain = plan.Explain()
 	res.Pipeline = pipelineStatus(res)
 	return res, nil
+}
+
+func validateInShadow(ctx context.Context, sd migrate.ShadowDriver, dir string, res *codegen.Result) error {
+	if err := sd.Reset(ctx); err != nil {
+		return fmt.Errorf("shadow reset: %w", err)
+	}
+	files, err := store.ListFiles(dir)
+	if err != nil {
+		return err
+	}
+	// Apply all existing migrations
+	ex := executor.New(sd)
+	if _, err := ex.Apply(ctx, files); err != nil {
+		return fmt.Errorf("shadow apply existing: %w", err)
+	}
+	// The newly generated file is already in 'files' if we listed after writing.
+	// But let's be explicit and make sure it's applied.
+	// Actually, store.ListFiles will pick up the new file.
+	return nil
 }
 
 func runValidate(ctx context.Context, opts Options) (*Result, error) {
@@ -349,6 +389,75 @@ func runHistory(ctx context.Context, opts Options) (*Result, error) {
 	}
 	res.Explain = b.String()
 	res.Pipeline = "ok"
+	return res, nil
+}
+
+func runDoctor(ctx context.Context, opts Options) (*Result, error) {
+	res := &Result{Intent: "doctor"}
+	var b strings.Builder
+	fmt.Fprintf(&b, "🩺 GMS Doctor — Diagnosing your database and migration health...\n\n")
+
+	// 1. Connection Check
+	fmt.Fprintf(&b, "1. Database Connection: ")
+	dbVer, err := opts.DBDriver.DatabaseVersion(ctx)
+	if err != nil {
+		fmt.Fprintf(&b, "❌ FAILED\n   Error: %v\n", err)
+		res.Pipeline = "error"
+	} else {
+		fmt.Fprintf(&b, "✅ OK (%s %s)\n", opts.DialectName, dbVer)
+	}
+
+	// 2. Permissions Check
+	fmt.Fprintf(&b, "2. Database Permissions: ")
+	err = opts.DBDriver.EnsureHistoryTable(ctx)
+	if err != nil {
+		fmt.Fprintf(&b, "❌ FAILED (Cannot manage history table)\n   Error: %v\n", err)
+		res.Pipeline = "error"
+	} else {
+		fmt.Fprintf(&b, "✅ OK (Can manage _migrate_history)\n")
+	}
+
+	// 3. Migration Files Check
+	fmt.Fprintf(&b, "3. Migration Files: ")
+	files, err := store.ListFiles(opts.OutputDir)
+	if err != nil {
+		fmt.Fprintf(&b, "❌ FAILED (Cannot read directory %q)\n   Error: %v\n", opts.OutputDir, err)
+		res.Pipeline = "error"
+	} else {
+		fmt.Fprintf(&b, "✅ OK (%d files found in %s)\n", len(files), opts.OutputDir)
+	}
+
+	// 4. Migration Integrity Check
+	fmt.Fprintf(&b, "4. Migration Integrity: ")
+	hist, _ := opts.DBDriver.LoadHistory(ctx)
+	v := validator.New(opts.Migrator.SafetyOptions())
+	report := v.FullValidate(ctx, files, hist)
+	if len(report.Errors) > 0 {
+		fmt.Fprintf(&b, "❌ FAILED (%d issues found)\n", len(report.Errors))
+		for _, e := range report.Errors {
+			fmt.Fprintf(&b, "   - [%s] %s\n", e.Code, e.Message)
+		}
+		res.Pipeline = "error"
+	} else {
+		fmt.Fprintf(&b, "✅ OK\n")
+	}
+
+	// 5. Lock Check
+	fmt.Fprintf(&b, "5. Lock Status: ")
+	lockStart := time.Now()
+	err = opts.DBDriver.AcquireLock(ctx)
+	if err != nil {
+		fmt.Fprintf(&b, "⚠️ LOCKED (Database is currently locked or stale lock)\n   Error: %v\n", err)
+	} else {
+		_ = opts.DBDriver.ReleaseLock(ctx)
+		fmt.Fprintf(&b, "✅ OK (Lock acquired in %v)\n", time.Since(lockStart).Round(time.Millisecond))
+	}
+
+	fmt.Fprintf(&b, "\n✨ Diagnosis complete.\n")
+	res.Explain = b.String()
+	if res.Pipeline == "" {
+		res.Pipeline = "ok"
+	}
 	return res, nil
 }
 

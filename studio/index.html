@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>GMS Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-node-html-label@1.2.2/dist/cytoscape-node-html-label.min.js"></script>
 <style>
   :root {
     --bg:           #0b0d12;
@@ -329,6 +333,80 @@
   }
   .pagination .grow { flex: 1; }
 
+  /* ── ERD VIEW ────────────────────────────────────────────── */
+  .erd-container {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    background: #0d1117;
+    position: relative;
+    overflow: hidden;
+  }
+  #erd-canvas {
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* ERD Node Style */
+  .erd-table {
+    background: #161a23;
+    border: 1.5px solid #3d4455;
+    border-radius: 6px;
+    color: #e7ecf3;
+    font-family: var(--mono);
+    font-size: 11px;
+    width: 220px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  }
+  .erd-table-header {
+    background: #2a3140;
+    padding: 8px 12px;
+    font-weight: 700;
+    font-size: 12px;
+    border-bottom: 1.5px solid #3d4455;
+    color: #6aa3ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .erd-table-body {
+    padding: 6px 0;
+  }
+  .erd-column {
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .erd-column:hover {
+    background: rgba(106,163,255,0.08);
+  }
+  .erd-col-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .erd-col-type {
+    color: #8a93a6;
+    font-size: 10px;
+  }
+  .erd-pk-icon {
+    color: #fbbf24;
+    font-size: 10px;
+  }
+
+  .erd-toolbar {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+  }
+
   .toast {
     position: fixed; bottom: 16px; right: 16px;
     background: var(--bg-elev-2);
@@ -469,6 +547,25 @@
   ::-webkit-scrollbar-thumb { background: #232a37; border-radius: 6px; border: 2px solid var(--bg); }
   ::-webkit-scrollbar-thumb:hover { background: #2e3647; }
   ::-webkit-scrollbar-track { background: transparent; }
+
+  /* MongoDB Atlas style */
+  .mongo-doc { background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; font-family: var(--mono); font-size: 13px; }
+  .mongo-doc-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--bg-elev); border-radius: 8px 8px 0 0; }
+  .mongo-doc-body { padding: 14px; overflow-x: auto; }
+  .mongo-actions button { background: transparent; border: 1px solid var(--border-2); color: var(--text-dim); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; transition: all .15s; margin-left: 6px; }
+  .mongo-actions button:hover { background: var(--bg-row-hover); color: var(--text); border-color: var(--border); }
+  .json-tree { margin-left: 16px; border-left: 1px solid var(--border-2); padding-left: 8px; }
+  .json-line { margin: 2px 0; display: flex; align-items: flex-start; }
+  .json-key { color: var(--accent); margin-right: 8px; }
+  .json-val.string { color: var(--green); }
+  .json-val.number { color: var(--orange); }
+  .json-val.boolean { color: var(--pink); }
+  .json-val.null { color: var(--text-muted); font-style: italic; }
+  .json-type { color: var(--text-muted); font-size: 10px; margin-left: 8px; opacity: 0.7; }
+  .json-collapser { cursor: pointer; color: var(--text-muted); user-select: none; width: 14px; display: inline-block; text-align: center; font-size: 10px; }
+  .json-collapser:hover { color: var(--text); }
+  .mongo-edit-area { width: 100%; height: 200px; background: var(--bg-row); color: var(--green); font-family: var(--mono); border: 1px solid var(--border-2); border-radius: 6px; padding: 10px; resize: vertical; outline: none; }
+  .mongo-edit-area:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -617,6 +714,19 @@ async function loadTables() {
 function renderTables() {
   const list = $('#tables-list');
   list.innerHTML = '';
+  
+  // Visualizations Group
+  if (state.info && state.info.driver && state.info.driver.toLowerCase() !== 'mongodb') {
+    list.appendChild(el('div',{class:'group-label'},'Visualizations'));
+    const erdItem = el('div',{class:'table-item' + (state.active === '@erd' ? ' active' : ''), onclick: () => openERD() },
+      el('div',{class:'name'},
+        el('span',{html: erdIconSVG()}),
+        el('span',{}, 'ERD Diagram')
+      )
+    );
+    list.appendChild(erdItem);
+  }
+
   list.appendChild(el('div',{class:'group-label'},'Tables'));
   const q = $('#search').value.trim().toLowerCase();
   const items = state.tables.filter(t => !q || t.name.toLowerCase().includes(q));
@@ -663,7 +773,18 @@ function closeTab(name, ev) {
 function renderTabs() {
   const tabs = $('#tabs');
   tabs.innerHTML = '';
+  
+  // Permanent ERD tab if it was opened
+  if (state.open.find(t => t.name === '@erd')) {
+    tabs.appendChild(el('div',{class:'tab' + (state.active === '@erd' ? ' active' : ''), onclick: ()=>{ state.active = '@erd'; renderTabs(); renderActive(); }},
+      el('span', {html: erdIconSVG()}),
+      'ERD Diagram',
+      el('span',{class:'close', onclick: (e)=>closeTab('@erd', e), html: closeIconSVG()})
+    ));
+  }
+
   for (const t of state.open) {
+    if (t.name === '@erd') continue;
     tabs.appendChild(el('div',{class:'tab' + (t.name === state.active ? ' active' : ''), onclick: ()=>{ state.active = t.name; renderTabs(); renderActive(); }},
       el('span', {html: tableIconSVG()}),
       t.name,
@@ -684,6 +805,12 @@ async function renderActive() {
       )));
     return;
   }
+
+  if (state.active === '@erd') {
+    await renderERD();
+    return;
+  }
+
   const name = state.active;
   // toolbar
   const toolbar = el('div',{class:'toolbar'});
@@ -746,6 +873,7 @@ function typeBadgeChar(t) {
 }
 
 function drawTable(data) {
+  if (state.info && state.info.driver && state.info.driver.toLowerCase() === 'mongodb') return drawMongoTable(data);
   const wrap = $('#dataWrap');
   wrap.innerHTML = '';
   const table = el('table',{class:'data'});
@@ -927,6 +1055,268 @@ function pkFromRow(row, cols) {
   return pk;
 }
 
+function renderJsonTree(val, container) {
+  if (val === null) {
+    container.appendChild(el('span', {class: 'json-val null'}, 'null'));
+    container.appendChild(el('span', {class: 'json-type'}, 'Null'));
+  } else if (typeof val === 'boolean') {
+    container.appendChild(el('span', {class: 'json-val boolean'}, String(val)));
+    container.appendChild(el('span', {class: 'json-type'}, 'Boolean'));
+  } else if (typeof val === 'number') {
+    container.appendChild(el('span', {class: 'json-val number'}, String(val)));
+    container.appendChild(el('span', {class: 'json-type'}, 'Number'));
+  } else if (typeof val === 'string') {
+    container.appendChild(el('span', {class: 'json-val string'}, '"' + val + '"'));
+    container.appendChild(el('span', {class: 'json-type'}, 'String'));
+  } else if (Array.isArray(val)) {
+    const collapser = el('span', {class: 'json-collapser'}, '▼');
+    const head = el('span', {}, 'Array [' + val.length + ']');
+    const block = el('div', {class: 'json-tree'});
+    container.append(collapser, head, block);
+    collapser.onclick = () => {
+      const isHidden = block.style.display === 'none';
+      block.style.display = isHidden ? 'block' : 'none';
+      collapser.textContent = isHidden ? '▼' : '▶';
+    };
+    val.forEach((item, i) => {
+      const line = el('div', {class: 'json-line'});
+      line.appendChild(el('span', {class: 'json-key'}, i + ':'));
+      renderJsonTree(item, line);
+      block.appendChild(line);
+    });
+  } else if (typeof val === 'object') {
+    const collapser = el('span', {class: 'json-collapser'}, '▼');
+    const head = el('span', {}, 'Object {' + Object.keys(val).length + '}');
+    const block = el('div', {class: 'json-tree'});
+    container.append(collapser, head, block);
+    collapser.onclick = () => {
+      const isHidden = block.style.display === 'none';
+      block.style.display = isHidden ? 'block' : 'none';
+      collapser.textContent = isHidden ? '▼' : '▶';
+    };
+    for (const [k, v] of Object.entries(val)) {
+      const line = el('div', {class: 'json-line'});
+      line.appendChild(el('span', {class: 'json-key'}, k + ':'));
+      renderJsonTree(v, line);
+      block.appendChild(line);
+    }
+  }
+}
+
+function drawMongoTable(data) {
+  const wrap = $('#dataWrap');
+  wrap.innerHTML = '';
+  
+  if (data.rows.length === 0) {
+    wrap.appendChild(el('div',{style:'padding:24px; text-align:center; color:var(--text-muted); font-style:italic;'}, 'No documents.'));
+  }
+
+  for (let ri = 0; ri < data.rows.length; ri++) {
+    const doc = data.rows[ri][0]; // single json col
+    const _id = doc._id;
+    const docEl = el('div', {class: 'mongo-doc'});
+    
+    // Header
+    const hdr = el('div', {class: 'mongo-doc-header'});
+    hdr.appendChild(el('div', {}, el('strong', {}, '_id: '), String(_id)));
+    
+    const actions = el('div', {class: 'mongo-actions'});
+    const editBtn = el('button', {onclick: () => editMongoDoc(data.name, doc)}, el('span', {html: editIconSVG?editIconSVG():'✎'}), ' Edit Document');
+    const delBtn = el('button', {onclick: () => deleteMongoDoc(data.name, _id)}, el('span', {html: trashIconSVG?trashIconSVG():'✕'}), ' Delete');
+    actions.append(editBtn, delBtn);
+    hdr.appendChild(actions);
+    
+    // Body
+    const body = el('div', {class: 'mongo-doc-body'});
+    renderJsonTree(doc, body);
+    
+    docEl.append(hdr, body);
+    wrap.appendChild(docEl);
+  }
+
+  // Pager
+  const page = state.page[data.name];
+  const start = data.total === 0 ? 0 : page.offset + 1;
+  const end   = page.offset + data.rows.length;
+  $('#rangeInfo').innerHTML = `Showing <b>${fmt.num(start)}–${fmt.num(end)}</b> of <b>${fmt.num(data.total)}</b>`;
+  const pager = $('#pagerBar');
+  pager.innerHTML = '';
+  pager.append(
+    el('span',{}, `Page size: `),
+    pageSizeSelect(data.name, page.limit),
+    el('span',{class:'grow'}),
+    el('span',{}, `${fmt.num(start)}–${fmt.num(end)} of ${fmt.num(data.total)}`),
+    pageBtn('« First', page.offset === 0, () => { page.offset = 0; loadAndRender(data.name); }),
+    pageBtn('‹ Prev',  page.offset === 0, () => { page.offset = Math.max(0, page.offset - page.limit); loadAndRender(data.name); }),
+    pageBtn('Next ›',  end >= data.total, () => { page.offset = page.offset + page.limit; loadAndRender(data.name); }),
+    pageBtn('Last »',  end >= data.total, () => { page.offset = Math.max(0, Math.floor((data.total-1)/page.limit) * page.limit); loadAndRender(data.name); }),
+    el('span',{style:'margin-left:10px; opacity:.6'}, `(${data.took})`)
+  );
+}
+
+async function deleteMongoDoc(name, _id) {
+  if (!await showConfirm('Delete Document', 'Are you sure you want to delete this document?')) return;
+  try {
+    await apiPost(`/api/table/${encodeURIComponent(name)}/delete`, { pks: [{_id: _id}] });
+    refresh(name);
+    toast('Document deleted');
+  } catch(e) {
+    showConfirm('Error', 'Failed to delete: ' + e.message, 'OK');
+  }
+}
+
+function buildMongoForm(doc, container, isAdd = false) {
+  for (const [k, v] of Object.entries(doc)) {
+    if (k === '_id') {
+      if (isAdd) continue;
+      // Show _id as readonly in edit
+      const grp = el('div', {class: 'form-group'});
+      grp.appendChild(el('label', {}, k));
+      const inp = el('input', {type: 'text', name: 'mongo_'+k, value: v, readonly: true});
+      inp.style.opacity = '0.7';
+      grp.appendChild(inp);
+      container.appendChild(grp);
+      continue;
+    }
+    const grp = el('div', {class: 'form-group'});
+    grp.appendChild(el('label', {}, k));
+    
+    let type = typeof v;
+    if (v === null) type = 'null';
+    else if (Array.isArray(v)) type = 'array';
+    
+    if (type === 'object' || type === 'array') {
+      const inp = el('textarea', {name: 'mongo_'+k, rows: 3});
+      inp.value = isAdd ? (type === 'array' ? '[]' : '{}') : JSON.stringify(v);
+      inp.dataset.type = 'json';
+      grp.appendChild(inp);
+    } else if (type === 'boolean') {
+      const inp = el('select', {name: 'mongo_'+k});
+      if (isAdd) inp.appendChild(el('option', {value: '', selected: true}, ''));
+      inp.appendChild(el('option', {value: 'true', selected: !isAdd && v===true}, 'true'));
+      inp.appendChild(el('option', {value: 'false', selected: !isAdd && v===false}, 'false'));
+      inp.dataset.type = 'boolean';
+      grp.appendChild(inp);
+    } else if (type === 'number') {
+      const inp = el('input', {type: 'number', step: 'any', name: 'mongo_'+k});
+      inp.value = isAdd ? '' : v;
+      inp.dataset.type = 'number';
+      grp.appendChild(inp);
+    } else {
+      const inp = el('input', {type: 'text', name: 'mongo_'+k});
+      inp.value = isAdd ? '' : (v !== undefined && v !== null ? String(v) : '');
+      inp.dataset.type = 'string';
+      grp.appendChild(inp);
+    }
+    container.appendChild(grp);
+  }
+}
+
+function getMongoFormData(container, isAdd = false) {
+  const result = {};
+  const inputs = $$('[name^="mongo_"]', container);
+  for (const inp of inputs) {
+    const key = inp.name.replace('mongo_', '');
+    const val = inp.value;
+    const type = inp.dataset.type;
+    if (inp.readOnly) {
+      result[key] = val;
+      continue;
+    }
+    
+    if (type === 'json') {
+      if (isAdd && (val === '' || val === '{}' || val === '[]')) continue;
+      try { result[key] = JSON.parse(val); }
+      catch(e) { result[key] = val; }
+    } else if (type === 'boolean') {
+      if (isAdd && val === '') continue;
+      result[key] = val === 'true';
+    } else if (type === 'number') {
+      if (isAdd && val === '') continue;
+      result[key] = val === '' ? null : Number(val);
+    } else {
+      if (isAdd && val === '') continue;
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
+function editMongoDoc(name, doc) {
+  const body = $('#addModalBody');
+  body.innerHTML = '';
+  $('#addModalTitle').textContent = 'Edit Document — ' + name;
+  
+  buildMongoForm(doc, body, false);
+  
+  $('#addModal').style.display = 'flex';
+  
+  const footer = body.nextElementSibling;
+  footer.innerHTML = '';
+  footer.appendChild(el('button', {class: 'btn', onclick: closeAddModal}, 'Cancel'));
+  footer.appendChild(el('button', {class: 'btn primary', onclick: async () => {
+    try {
+      const parsed = getMongoFormData(body, false);
+      const pk = {_id: parsed._id};
+      delete parsed._id;
+      await apiPost(`/api/table/${encodeURIComponent(name)}/update`, { pk: pk, values: parsed });
+      closeAddModal();
+      refresh(name);
+      toast('Document updated');
+    } catch (e) {
+      alert('Error updating document: ' + e.message);
+    }
+  }}, 'Save Document'));
+}
+
+const originalOpenAddModal = openAddModal;
+openAddModal = function(name) {
+  if (state.info && state.info.driver && state.info.driver.toLowerCase() === 'mongodb') {
+    const data = state.cache[name];
+    const body = $('#addModalBody');
+    body.innerHTML = '';
+    $('#addModalTitle').textContent = 'Insert Document — ' + name;
+    
+    // Infer schema from first 50 rows
+    const schema = {};
+    if (data && data.rows) {
+      for (let i = 0; i < Math.min(data.rows.length, 50); i++) {
+        const d = data.rows[i][0];
+        for (const [k, v] of Object.entries(d)) {
+          if (k !== '_id' && schema[k] === undefined) {
+             schema[k] = (v === null || v === undefined) ? '' : v;
+          }
+        }
+      }
+    }
+    // If empty collection, add a placeholder
+    if (Object.keys(schema).length === 0) {
+      schema['field1'] = '';
+    }
+    
+    buildMongoForm(schema, body, true);
+    
+    $('#addModal').style.display = 'flex';
+    
+    const footer = body.nextElementSibling;
+    footer.innerHTML = '';
+    footer.appendChild(el('button', {class: 'btn', onclick: closeAddModal}, 'Cancel'));
+    footer.appendChild(el('button', {class: 'btn primary', onclick: async () => {
+      try {
+        const parsed = getMongoFormData(body, true);
+        await apiPost(`/api/table/${encodeURIComponent(name)}/insert`, { values: parsed });
+        closeAddModal();
+        refresh(name);
+        toast('Document inserted');
+      } catch (e) {
+        alert('Error inserting document: ' + e.message);
+      }
+    }}, 'Insert Document'));
+    return;
+  }
+  originalOpenAddModal(name);
+}
+
 function colInputType(c) {
   const t = c.type.toLowerCase();
   if (c.enumValues && c.enumValues.length > 0) return 'enum';
@@ -946,7 +1336,8 @@ function openAddModal(name) {
   for (const c of data.columns) {
     if (c.isPK && c.autoIncrement) continue;
     const grp = el('div',{class:'form-group'});
-    grp.appendChild(el('label',{}, c.name, ' ', el('span',{class:'hint'}, '(' + c.type + (c.nullable ? ', nullable' : '') + ')')));
+    const isAuto = c.hasDefault;
+    grp.appendChild(el('label',{}, c.name, ' ', el('span',{class:'hint'}, '(' + c.type + (c.nullable ? ', nullable' : '') + (isAuto ? ', auto-default' : '') + ')')));
     const itype = colInputType(c);
     if (itype === 'enum') {
       const sel = el('select',{name: 'add_'+c.name});
@@ -999,6 +1390,11 @@ async function saveAddRecord() {
     if (c.isPK && c.autoIncrement) continue;
     const inp = document.querySelector('[name="add_'+c.name+'"]');
     if (!inp) continue;
+    
+    if (inp.type !== 'checkbox' && inp.value === '' && c.hasDefault) {
+      continue; // omit from values entirely to trigger db default
+    }
+
     if (inp.type === 'checkbox') values[c.name] = inp.checked;
     else if (inp.type === 'number') values[c.name] = inp.value ? (inp.value.includes('.') ? parseFloat(inp.value) : parseInt(inp.value, 10)) : null;
     else values[c.name] = inp.value || null;
@@ -1125,6 +1521,143 @@ function plusIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="
 function closeIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>`; }
 function editIconSVG()    { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11 2l3 3-9 9H2v-3z"/></svg>`; }
 function trashIconSVG()   { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M4 4l.7 9.3a1 1 0 0 0 1 .7h4.6a1 1 0 0 0 1-.7L12 4M6 7v5M10 7v5"/></svg>`; }
+function erdIconSVG()     { return `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="5" height="4.5" rx="1"/><rect x="9" y="8.5" width="5" height="4.5" rx="1"/><rect x="9" y="3" width="5" height="4.5" rx="1"/><path d="M7 5.25h2M11.5 7.5v1M5 7.5v3.5a1 1 0 0 0 1 1h3"/></svg>`; }
+
+function openERD() {
+  if (!state.open.find(t => t.name === '@erd')) state.open.push({name: '@erd'});
+  state.active = '@erd';
+  renderTables();
+  renderTabs();
+  renderActive();
+}
+
+async function renderERD() {
+  const content = $('#content');
+  content.innerHTML = '';
+  
+  const container = el('div', {class: 'erd-container'},
+    el('div', {id: 'erd-canvas'}),
+    el('div', {class: 'erd-toolbar'},
+      el('button', {class: 'btn', onclick: () => cytoscapeInstance.layout({name: 'dagre'}).run()}, 'Auto Layout'),
+      el('button', {class: 'btn', onclick: () => cytoscapeInstance.fit()}, 'Fit View')
+    )
+  );
+  content.appendChild(container);
+
+  const elements = [];
+  // Build Nodes (Tables)
+  for (const t of state.tables) {
+    try {
+      const data = await api(`/api/table/${encodeURIComponent(t.name)}?limit=1`);
+      
+      // HTML for columns
+      const colHtml = data.columns.map(c => `
+        <div class="erd-column">
+          <span class="erd-pk-icon">${c.isPK ? '🔑' : '&nbsp;&nbsp;'}</span>
+          <span class="erd-col-name">${c.name}</span>
+          <span class="erd-col-type">${c.type.split('(')[0]}</span>
+        </div>
+      `).join('');
+
+      elements.push({
+        data: { 
+          id: t.name, 
+          label: t.name,
+          html: `
+            <div class="erd-table">
+              <div class="erd-table-header">
+                <span>${t.name}</span>
+                <span style="opacity:0.5; font-size:9px">#${data.total}</span>
+              </div>
+              <div class="erd-table-body">
+                ${colHtml}
+              </div>
+            </div>
+          `,
+          colCount: data.columns.length
+        }
+      });
+      
+      // Build Edges (Foreign Keys)
+      if (data.constraints) {
+        for (const cname in data.constraints) {
+          const c = data.constraints[cname];
+          if (c.kind === 'FOREIGN_KEY' || c.kind === 2) { // 2 is migrate.ConstraintForeignKey
+            elements.push({
+              data: {
+                id: cname,
+                source: t.name,
+                target: c.refTable,
+                label: c.columns.join(', ') + ' → ' + c.refColumns.join(', ')
+              }
+            });
+          }
+        }
+      }
+    } catch(e) {
+      console.error('Failed to load table info for ERD:', e);
+    }
+  }
+
+  cytoscape.use(cytoscapeDagre);
+  
+  window.cytoscapeInstance = cytoscape({
+    container: document.getElementById('erd-canvas'),
+    elements: elements,
+    style: [
+      {
+        selector: 'node',
+        style: {
+          'width': '220px',
+          'height': (ele) => (40 + (ele.data('colCount') * 22)) + 'px',
+          'shape': 'rectangle',
+          'background-opacity': 0,
+          'border-width': 0,
+          'label': '' // Label is handled by HTML plugin
+        }
+      },
+      {
+        selector: 'edge',
+        style: {
+          'width': 2,
+          'line-color': '#6aa3ff',
+          'target-arrow-color': '#6aa3ff',
+          'target-arrow-shape': 'triangle',
+          'curve-style': 'taxi',
+          'taxi-direction': 'auto',
+          'label': 'data(label)',
+          'font-size': '9px',
+          'color': '#8a93a6',
+          'text-rotation': 'autorotate',
+          'text-background-opacity': 1,
+          'text-background-color': '#0d1117',
+          'text-background-padding': '2px'
+        }
+      }
+    ],
+    layout: {
+      name: 'dagre',
+      padding: 50
+    }
+  });
+
+  // Initialize HTML Label plugin
+  window.cytoscapeInstance.nodeHtmlLabel([
+    {
+      query: 'node',
+      halign: 'center',
+      valign: 'center',
+      halignBox: 'center',
+      valignBox: 'center',
+      tpl: (data) => data.html
+    }
+  ]);
+
+  window.cytoscapeInstance.on('tap', 'node', function(evt){
+    const node = evt.target;
+    openTable(node.id());
+  });
+}
 
 init();
 </script>

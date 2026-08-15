@@ -48,6 +48,7 @@ func (p *Parser) Parse(models ...any) (*migrate.SchemaModel, error) {
 func (p *Parser) parseStruct(t reflect.Type) (*migrate.TableModel, error) {
 	tableName := PluralizeTable(t.Name())
 
+	var tableOldName string
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.Name == "_" {
@@ -58,6 +59,9 @@ func (p *Parser) parseStruct(t reflect.Type) (*migrate.TableModel, error) {
 			if tag.TableOverride != "" {
 				tableName = tag.TableOverride
 			}
+			if tag.TableOldName != "" {
+				tableOldName = tag.TableOldName
+			}
 		}
 	}
 	if err := ValidateIdentifier(tableName); err != nil {
@@ -65,6 +69,7 @@ func (p *Parser) parseStruct(t reflect.Type) (*migrate.TableModel, error) {
 	}
 
 	tbl := migrate.NewTableModel(tableName)
+	tbl.OldName = tableOldName
 
 	type group struct {
 		Name   string
@@ -105,6 +110,7 @@ func (p *Parser) parseStruct(t reflect.Type) (*migrate.TableModel, error) {
 			Size:          tag.Size,
 			Precision:     tag.Precision,
 			Scale:         tag.Scale,
+			OldName:       tag.OldName,
 		}
 
 		if tag.TypeOverride != "" {
@@ -183,6 +189,16 @@ func (p *Parser) parseStruct(t reflect.Type) (*migrate.TableModel, error) {
 				Columns:    []string{col.Name},
 				RefTable:   tag.FKRefTable,
 				RefColumns: []string{tag.FKRefColumn},
+			}
+		}
+
+		if tag.Check != "" {
+			chkName := fmt.Sprintf("chk_%s_%s", tableName, col.Name)
+			tbl.Constraints[chkName] = &migrate.ConstraintModel{
+				Name:      chkName,
+				Kind:      migrate.ConstraintCheck,
+				Columns:   []string{col.Name},
+				CheckExpr: tag.Check,
 			}
 		}
 	}
