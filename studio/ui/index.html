@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>GMS Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-node-html-label@1.2.2/dist/cytoscape-node-html-label.min.js"></script>
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div>
+        <div class="title">GMS Studio</div>
+        <div class="subtitle">go-migrate-safe</div>
+      </div>
+    </div>
+    <div class="conn">
+      <div class="row"><span class="k">Driver</span> <span id="conn-driver" class="pill">…</span></div>
+      <div class="row"><span class="k">Schema</span> <span id="conn-schema" class="v">…</span></div>
+      <div class="row"><span class="k">Version</span> <span id="conn-version" class="v" title="">…</span></div>
+    </div>
+    <div class="search">
+      <input id="search" placeholder="Search tables…" />
+    </div>
+    <div class="tables" id="tables-list">
+      <div class="group-label">Tables</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="tabs" id="tabs"></div>
+    <div id="content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <div class="splash" id="splash">
+        <div class="inner">
+          <h1>Welcome to GMS Studio</h1>
+          <p>Select a table from the left to start browsing.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+
+<!-- Add Record Modal -->
+<div id="addModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="addModalTitle">Add Record</span>
+      <button class="close-btn" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="modal-body" id="addModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAddModal()">Cancel</button>
+      <button class="btn primary" onclick="saveAddRecord()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeConfirm(false)">
+  <div class="modal" style="width: 400px;">
+    <div class="modal-header">
+      <span id="confirmTitle">Confirm Action</span>
+      <button class="close-btn" onclick="closeConfirm(false)">✕</button>
+    </div>
+    <div class="modal-body" id="confirmBody" class="confirm-text">
+      Are you sure you want to proceed?
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirm(false)">Cancel</button>
+      <button id="confirmBtn" class="btn primary">Proceed</button>
+    </div>
+  </div>
+</div>
+
+<script src="/ui/app.js"></script>
+</body>
+</html>
+

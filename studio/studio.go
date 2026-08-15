@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -90,6 +91,11 @@ func (s *Server) Listen(addr string) error {
 	mux.HandleFunc("/api/tables", s.handleTables)
 	mux.HandleFunc("/api/table/", s.handleTableAPI)
 
+	// Serve static assets from embedded UI filesystem
+	if staticFS, err := fs.Sub(uiFS, "ui"); err == nil {
+		mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.FS(staticFS))))
+	}
+
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
 		return err
@@ -122,8 +128,15 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	
+	htmlBytes, err := uiFS.ReadFile("ui/index.html")
+	if err != nil {
+		http.Error(w, "Failed to load index.html", http.StatusInternalServerError)
+		return
+	}
+	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(indexHTML)
+	w.Write(htmlBytes)
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
