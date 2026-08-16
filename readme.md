@@ -126,6 +126,7 @@ gms rollback
 
 | Command      | Description                                      |
 |--------------|--------------------------------------------------|
+| `init`       | Initialize project with a sample model and dir   |
 | `generate`   | Generate migration files from struct models      |
 | `apply`      | Apply pending migrations                         |
 | `status`     | Show current migration status                    |
@@ -133,6 +134,7 @@ gms rollback
 | `validate`   | Validate all migration files                     |
 | `rollback`   | Rollback last N migrations                       |
 | `diff`       | Show what would change (no files written)        |
+| `doctor`     | Diagnose DB connection, permissions, and health  |
 | `studio`     | Launch the GMS Studio web UI to browse/edit DB   |
 
 ## GMS Studio
@@ -149,9 +151,10 @@ gms studio --driver postgres --addr 127.0.0.1:4489
 ```
 
 Features:
-- **Modern Dark UI**: Clean and responsive interface.
-- **CRUD Operations**: Add, edit, and delete records with a custom confirmation modal.
-- **Schema Awareness**: Automatically detects primary keys and data types for safe editing.
+- **Universal Support**: Works seamlessly with SQL databases (PostgreSQL, MySQL, SQLite, SQL Server) and NoSQL (MongoDB).
+- **Auto-Default Detection**: Intelligently parses your database schema (e.g. `DEFAULT CURRENT_TIMESTAMP` in SQL) and automatically hides/infers these fields when adding new records.
+- **Modern Architecture**: Clean, responsive interface powered by `embed.FS` with zero external dependencies to manage.
+- **Schema Awareness**: Automatically detects primary keys and data types to prevent destructive overwrites and ensure safe editing.
 - **Smart Paging**: Efficiently handle large tables with pagination and search.
 
 ## Supported Databases
@@ -161,6 +164,18 @@ Features:
 - SQLite
 - SQL Server
 - MongoDB
+
+### NoSQL / MongoDB Workflow
+
+MongoDB is officially supported. GMS relies on standard `bson` tags for schema mapping instead of `db` tags. Migrations are generated as `.jsonc` files (NoSQL operations) rather than `.sql` files.
+
+```go
+type Order struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" pk:"true"`
+	OrderNum  string             `bson:"order_num" unique:"true"`
+	Total     float64            `bson:"total"`
+}
+```
 
 ## Struct Tags
 
